@@ -36,6 +36,7 @@ function buildMessage(guest: Guest, event: Event, url: string): string {
     "هذا الرابط هو دعوتك. افتحه وأظهر رمز QR عند الباب:",
     url,
     "",
+    ...(event.locationLink ? ["الموقع على الخريطة:", event.locationLink, ""] : []),
     `يشمل ${seatsText}. بانتظاركم.`,
   ].join("\n");
 }

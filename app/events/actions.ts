@@ -24,6 +24,7 @@ function readEventInput(formData: FormData) {
     name: String(formData.get("name") ?? ""),
     eventDate: String(formData.get("eventDate") ?? "").trim() || null,
     venue: String(formData.get("venue") ?? "").trim() || null,
+    locationLink: String(formData.get("locationLink") ?? "").trim() || null,
     description: String(formData.get("description") ?? "").trim() || null,
     doorCode: String(formData.get("doorCode") ?? ""),
     capacity: parseCapacity(String(formData.get("capacity") ?? "")),

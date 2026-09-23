@@ -27,6 +27,7 @@ export const events = pgTable("events", {
   name: text("name").notNull(),
   eventDate: text("event_date"),
   venue: text("venue"),
+  locationLink: text("location_link"),
   description: text("description"),
   doorCode: text("door_code").notNull().unique(),
   capacity: integer("capacity"),

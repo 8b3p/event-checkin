@@ -34,6 +34,17 @@ export default function EventSettingsForm({ event }: { event: Event }) {
             </Field>
           </div>
 
+          <Field label="رابط الموقع" htmlFor="locationLink" hint="رابط خرائط جوجل مثلاً، يُرفق مع الدعوة.">
+            <Input
+              id="locationLink"
+              name="locationLink"
+              type="url"
+              placeholder="https://maps.google.com/…"
+              defaultValue={event.locationLink ?? ""}
+              dir="ltr"
+            />
+          </Field>
+
           <Field label="الوصف" htmlFor="description" hint="اختياري.">
             <Textarea id="description" name="description" rows={3} defaultValue={event.description ?? ""} />
           </Field>

@@ -5,6 +5,7 @@ export type Event = {
   name: string;
   eventDate: string | null;
   venue: string | null;
+  locationLink: string | null;
   description: string | null;
   doorCode: string;
   capacity: number | null;
@@ -16,6 +17,7 @@ export type EventInput = {
   name: string;
   eventDate: string | null;
   venue: string | null;
+  locationLink: string | null;
   description: string | null;
   doorCode: string;
   capacity: number | null;

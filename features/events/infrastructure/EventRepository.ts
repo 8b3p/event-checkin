@@ -10,6 +10,7 @@ function toEvent(row: typeof events.$inferSelect): Event {
     name: row.name,
     eventDate: row.eventDate,
     venue: row.venue,
+    locationLink: row.locationLink,
     description: row.description,
     doorCode: row.doorCode,
     capacity: row.capacity,

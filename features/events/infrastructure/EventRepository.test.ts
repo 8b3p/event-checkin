@@ -6,6 +6,7 @@ const BASE = {
   name: "Layla & Omar",
   eventDate: "2026-11-01",
   venue: "The Palm Hall",
+  locationLink: null,
   description: null,
   doorCode: "PALM1",
   capacity: 200,

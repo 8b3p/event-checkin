@@ -7,6 +7,7 @@ const EVENT = {
   name: "Layla & Omar",
   eventDate: null,
   venue: null,
+  locationLink: null,
   description: null,
   doorCode: "PALM1",
   capacity: null,

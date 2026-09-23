@@ -55,6 +55,16 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
           <h1 className="display mt-3 text-4xl leading-tight text-foreground">{event.name}</h1>
           {when ? <p className="mt-3 text-sm text-accent-foreground">{when}</p> : null}
           {event.venue ? <p className="text-sm text-accent-foreground">{event.venue}</p> : null}
+          {event.locationLink ? (
+            <a
+              href={event.locationLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-block text-sm font-medium text-accent-foreground underline underline-offset-2"
+            >
+              الموقع على الخريطة
+            </a>
+          ) : null}
         </div>
 
         <div className="px-6 py-8 text-center">

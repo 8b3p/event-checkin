@@ -14,6 +14,7 @@ export class DuplicateEventUseCase {
       name: source.name,
       eventDate: null,
       venue: source.venue,
+      locationLink: source.locationLink,
       description: source.description,
       doorCode: newDoorCode,
       capacity: source.capacity,

@@ -28,6 +28,16 @@ export default function CreateEventForm({ suggestedDoorCode }: { suggestedDoorCo
             </Field>
           </div>
 
+          <Field label="رابط الموقع" htmlFor="locationLink" hint="رابط خرائط جوجل مثلاً، يُرفق مع الدعوة.">
+            <Input
+              id="locationLink"
+              name="locationLink"
+              type="url"
+              placeholder="https://maps.google.com/…"
+              dir="ltr"
+            />
+          </Field>
+
           <Field label="الوصف" htmlFor="description" hint="اختياري.">
             <Textarea id="description" name="description" rows={3} />
           </Field>
