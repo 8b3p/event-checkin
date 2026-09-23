@@ -262,7 +262,7 @@ export default function Scanner({
             either tab. Rendered last so it stacks above the guest panel's opaque
             bg-canvas layer instead of being hidden behind it. */}
         {cameraError ? (
-          <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8 text-center">
             <p className="text-sm text-night-muted">{cameraError}</p>
           </div>
         ) : null}
