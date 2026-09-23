@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CheckSetupStatusUseCase } from "@/features/auth/domain/use-cases/CheckSetupStatusUseCase";
 import { makeOwnerRepository } from "@/features/auth/infrastructure/factory";
@@ -19,6 +20,12 @@ export default async function LoginPage() {
       </div>
 
       <LoginForm />
+
+      <p className="mt-5 text-center text-xs text-muted-foreground">
+        <Link href="/door" className="underline underline-offset-4 hover:text-foreground">
+          فريق الاستقبال؟ ادخل برمز الباب
+        </Link>
+      </p>
     </main>
   );
 }
