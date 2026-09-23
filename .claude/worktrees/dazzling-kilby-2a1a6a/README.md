@@ -1,0 +1,103 @@
+# Door
+
+QR invitations for a wedding, and a scanner for the people working the door.
+
+You add your guest list, each invitation gets its own QR code and a link you can
+send on WhatsApp, and whoever is on the door scans people in from their phone.
+You watch the room fill up from the dashboard.
+
+## The screens so far
+
+| Screen | Who | What it does |
+|---|---|---|
+| `/setup` | you, once | Create your owner account |
+| `/login` | you | Sign in |
+| `/` | you | Your list of events, with quick stats |
+| `/events/new` | you | Create a new event |
+| `/events/[id]` | you | That event's details, door code, duplicate/archive |
+
+Guest management, QR invitations, and the door scanner are being rebuilt for
+multiple events and aren't wired up yet — that's the next plan.
+
+## Running it locally
+
+```bash
+docker compose up -d      # starts local Postgres on localhost:5433
+cp .env.example .env      # then fill in SESSION_SECRET and confirm DATABASE_URL
+npm install
+npm run db:push           # creates the schema
+npm run dev               # http://localhost:3000
+```
+
+Postgres runs on host port **5433**, not the Postgres default 5432 — another
+local project's container was already sitting on 5432, so `docker-compose.yml`
+maps it to 5433 instead. `DATABASE_URL` in `.env.example` already points at
+`postgres://door:door@localhost:5433/door_dev`, matching `docker-compose.yml`;
+you shouldn't need to change it for local dev.
+
+Generate the session secret with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+The first time you open it, `/setup` asks for everything it needs. There is no
+default password to forget to change.
+
+## Putting it online
+
+Two things matter.
+
+**`NEXT_PUBLIC_APP_URL` must be the real public address before you send a single
+invitation.** It is baked into every QR code. If you generate codes pointing at
+`localhost` and send them out, they won't work at the door.
+
+**The database is Postgres**, reached through `DATABASE_URL`. Point that at a
+managed Postgres instance (or one you run yourself) and the app itself is
+stateless, so it's fine on Vercel or any other serverless host:
+
+```bash
+npm run build
+npm start                 # honours PORT
+```
+
+The scanner needs **https** (or localhost). Browsers refuse camera access
+otherwise, which is the usual reason a scanner "doesn't work" on a phone.
+
+## Backing it up
+
+Backup strategy is TBD — a later plan's job. For now, use whatever backup
+mechanism your Postgres host provides (managed hosts typically offer automatic
+snapshots; a self-run instance can use `pg_dump`).
+
+## How check-in works
+
+Three tables: `settings` (one row), `guests` (one row per invitation, each with a
+unique code), and `checkins` (one row per scan).
+
+Arrivals are counted by summing `checkins.seats`, never by flipping a flag on the
+guest. That means:
+
+- The first scan of an invitation admits everyone on it, in one tap.
+- Scanning again doesn't silently double-count. It stops and shows when they came
+  through, and only admits one more person if the operator explicitly overrides —
+  which is recorded as an override.
+- If fewer people turned up than the invitation allows, the door staff can correct
+  the number on the spot.
+- Everything is reversible from the guest's page.
+
+Codes are 10 characters of `crypto.randomBytes`, drawn from an alphabet with the
+easily-misread characters removed, so they can be read aloud when a guest's screen
+is too cracked or too dim to scan.
+
+## What it deliberately doesn't do
+
+- **No payments.** It's a wedding, not a ticketed event.
+- **No guest accounts.** A guest's link is their invitation; there's nothing to log
+  into.
+- **No offline scanning.** The door needs a working connection. Offline queues are
+  where double-entry bugs live, and a venue's wifi is usually fine. If you want it
+  later, the check-in API is the only thing that needs to change.
+
+Treat an invitation link like the paper card it replaces: whoever holds it can use
+it. That's the trade for guests not needing an account.

@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: door
+      POSTGRES_PASSWORD: door
+      POSTGRES_DB: door_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - door-postgres:/var/lib/postgresql/data
+
+volumes:
+  door-postgres:

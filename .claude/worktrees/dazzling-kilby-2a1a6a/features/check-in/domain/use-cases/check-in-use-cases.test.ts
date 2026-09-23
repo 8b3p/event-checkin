@@ -1,0 +1,90 @@
+import { describe, expect, it } from "vitest";
+import type {
+  ArrivalBucket,
+  EventStats,
+  GuestWithStatus,
+  RecentScan,
+  RecordScanInput,
+  ScanEvent,
+} from "../ScanEvent";
+import type { IScanRepository } from "../IScanRepository";
+import { GetArrivalBucketsUseCase } from "./GetArrivalBucketsUseCase";
+import { GetEventStatsUseCase } from "./GetEventStatsUseCase";
+import { GetGuestInsideSeatsUseCase } from "./GetGuestInsideSeatsUseCase";
+import { GetRecentScansUseCase } from "./GetRecentScansUseCase";
+import { ListGuestsWithStatusUseCase } from "./ListGuestsWithStatusUseCase";
+import { UndoLastScanUseCase } from "./UndoLastScanUseCase";
+
+class FakeScanRepository implements IScanRepository {
+  scans: ScanEvent[] = [];
+  guestsWithStatus: GuestWithStatus[] = [];
+  stats: EventStats = { invites: 0, seatsInvited: 0, guestsInside: 0, seatsInside: 0 };
+  buckets: ArrivalBucket[] = [];
+  recent: RecentScan[] = [];
+  private nextId = 1;
+
+  async record(input: RecordScanInput): Promise<ScanEvent> {
+    const scan: ScanEvent = { id: this.nextId++, at: new Date(), ...input };
+    this.scans.push(scan);
+    return scan;
+  }
+
+  async listForGuest(guestId: number): Promise<ScanEvent[]> {
+    return this.scans.filter((s) => s.guestId === guestId);
+  }
+
+  async undoLast(guestId: number): Promise<boolean> {
+    const last = [...this.scans].reverse().find((s) => s.guestId === guestId);
+    if (!last) return false;
+    this.scans = this.scans.filter((s) => s.id !== last.id);
+    return true;
+  }
+
+  async insideSeatsForGuest(): Promise<number> {
+    return 0;
+  }
+
+  async listGuestsWithStatus(): Promise<GuestWithStatus[]> {
+    return this.guestsWithStatus;
+  }
+
+  async eventStats(): Promise<EventStats> {
+    return this.stats;
+  }
+
+  async arrivalBuckets(): Promise<ArrivalBucket[]> {
+    return this.buckets;
+  }
+
+  async recentScans(): Promise<RecentScan[]> {
+    return this.recent;
+  }
+}
+
+describe("check-in use-cases", () => {
+  it("undoes the most recent scan for a guest, returns false if none exist", async () => {
+    const repo = new FakeScanRepository();
+    await repo.record({ guestId: 1, direction: "in", method: "qr", seats: 2, scannedBy: "door", override: false });
+
+    expect(await new UndoLastScanUseCase(repo).execute(1)).toBe(true);
+    expect(repo.scans).toHaveLength(0);
+    expect(await new UndoLastScanUseCase(repo).execute(1)).toBe(false);
+  });
+
+  it("passes through guest status, stats, arrival buckets, recent scans, and inside seats", async () => {
+    const repo = new FakeScanRepository();
+    repo.guestsWithStatus = [
+      { id: 1, name: "Sara", seats: 2, phone: null, note: null, code: "X", source: "invited", insideSeats: 2 },
+    ];
+    repo.stats = { invites: 1, seatsInvited: 2, guestsInside: 1, seatsInside: 2 };
+    repo.buckets = [{ minute: "2026-11-01T20:00:00.000Z", seats: 2 }];
+    repo.recent = [{ guestName: "Sara", direction: "in", method: "qr", seats: 2, at: new Date(), scannedBy: "door", override: false }];
+
+    expect(await new ListGuestsWithStatusUseCase(repo).execute(1)).toEqual(repo.guestsWithStatus);
+    expect(await new ListGuestsWithStatusUseCase(repo).execute(1, "sara")).toEqual(repo.guestsWithStatus);
+    expect(await new GetEventStatsUseCase(repo).execute(1)).toEqual(repo.stats);
+    expect(await new GetArrivalBucketsUseCase(repo).execute(1)).toEqual(repo.buckets);
+    expect(await new GetRecentScansUseCase(repo).execute(1)).toEqual(repo.recent);
+    expect(await new GetGuestInsideSeatsUseCase(repo).execute(1)).toBe(0);
+  });
+});
