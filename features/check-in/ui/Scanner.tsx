@@ -247,14 +247,19 @@ export default function Scanner({
           <div id={SCANNER_ID} className="h-full w-full" />
         </div>
 
-        {view === "camera" && overlay ? (
-          <ResultOverlay overlay={overlay} busy={busy} onDismiss={dismiss} onCommit={commit} onSearch={() => setView("guests")} />
-        ) : null}
-
         {view === "guests" ? (
           <div className="absolute inset-0 overflow-y-auto bg-canvas p-4 text-ink">
             <GuestSearchPanel guests={guests} onResolve={resolveGuest} onGuestAdded={(guest) => setGuests((rows) => [guest, ...rows])} />
           </div>
+        ) : null}
+
+        {/* Not gated on `view`: resolveGuest (tapped from the guest panel, i.e. while
+            view === "guests") sets this same overlay state, and must show the same
+            resolved-guest + check in/out action a camera scan does. Rendered after the
+            guests-panel block above so it stacks on top of that panel's opaque
+            bg-canvas layer instead of being hidden behind it. */}
+        {overlay ? (
+          <ResultOverlay overlay={overlay} busy={busy} onDismiss={dismiss} onCommit={commit} onSearch={() => setView("guests")} />
         ) : null}
 
         {/* Not gated on `view`: a resolveGuest/commit network failure happens while staff
