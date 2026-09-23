@@ -98,6 +98,8 @@ export default function Scanner({
       }
       const data = (await response.json()) as ResolveResult;
       if (data.status === "resolved") setOverlay({ kind: "pending", resolved: data, method: "manual" });
+    } catch {
+      setCameraError("تعذّر الاتصال. تحقّق من الشبكة وحاول مرة أخرى.");
     } finally {
       setBusy(false);
     }
@@ -134,6 +136,8 @@ export default function Scanner({
         setOverlay({ kind: "recorded", guestName: resolved.guest.name, direction: resolved.direction, seats });
         setRecent((rows) => [{ name: resolved.guest.name, direction: resolved.direction, seats, at: Date.now() }, ...rows].slice(0, 8));
         signalGood();
+      } catch {
+        setCameraError("تعذّر الاتصال. تحقّق من الشبكة وحاول مرة أخرى.");
       } finally {
         setBusy(false);
       }
@@ -176,6 +180,17 @@ export default function Scanner({
             // Fires every frame without a code found. Nothing to do.
           },
         );
+
+        if (cancelled) {
+          // Unmounted while start() was still pending (e.g. a slow camera-permission
+          // prompt) — the cleanup below already ran and had nothing to stop yet, so
+          // stop this now-live scanner ourselves instead of leaving the camera running.
+          await scanner
+            .stop()
+            .then(() => scanner?.clear())
+            .catch(() => undefined);
+          return;
+        }
       } catch {
         if (!cancelled) setCameraError("تعذّر الوصول إلى الكاميرا. اسمح بالوصول إليها من إعدادات المتصفح.");
       }
@@ -221,29 +236,33 @@ export default function Scanner({
         </button>
       </div>
 
-      {view === "camera" ? (
-        <div className="relative min-h-[320px] flex-1">
-          {/* html5-qrcode sets position:relative on its own container inline, so the
-              fill has to come from this wrapper — without it the camera letterboxes. */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div id={SCANNER_ID} className="h-full w-full" />
+      <div className="relative min-h-[320px] flex-1">
+        {/* html5-qrcode sets position:relative on its own container inline, so the
+            fill has to come from this wrapper — without it the camera letterboxes.
+            This container must stay mounted for the whole session: Html5Qrcode binds
+            to #wc-reader once at construction, so unmounting it on a view switch would
+            strand the running camera instance with no DOM node left to render into.
+            Toggle visibility instead of presence. */}
+        <div className={`absolute inset-0 overflow-hidden ${view === "camera" ? "" : "hidden"}`}>
+          <div id={SCANNER_ID} className="h-full w-full" />
+        </div>
+
+        {view === "camera" && cameraError ? (
+          <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
+            <p className="text-sm text-night-muted">{cameraError}</p>
           </div>
+        ) : null}
 
-          {cameraError ? (
-            <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
-              <p className="text-sm text-night-muted">{cameraError}</p>
-            </div>
-          ) : null}
+        {view === "camera" && overlay ? (
+          <ResultOverlay overlay={overlay} busy={busy} onDismiss={dismiss} onCommit={commit} onSearch={() => setView("guests")} />
+        ) : null}
 
-          {overlay ? (
-            <ResultOverlay overlay={overlay} busy={busy} onDismiss={dismiss} onCommit={commit} onSearch={() => setView("guests")} />
-          ) : null}
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto bg-canvas p-4 text-ink">
-          <GuestSearchPanel guests={guests} onResolve={resolveGuest} onGuestAdded={(guest) => setGuests((rows) => [guest, ...rows])} />
-        </div>
-      )}
+        {view === "guests" ? (
+          <div className="absolute inset-0 overflow-y-auto bg-canvas p-4 text-ink">
+            <GuestSearchPanel guests={guests} onResolve={resolveGuest} onGuestAdded={(guest) => setGuests((rows) => [guest, ...rows])} />
+          </div>
+        ) : null}
+      </div>
 
       {overlay ? null : (
         <div className="border-t border-night-line px-5 py-4">
