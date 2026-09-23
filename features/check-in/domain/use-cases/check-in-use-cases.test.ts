@@ -14,6 +14,7 @@ import { GetGuestInsideSeatsUseCase } from "./GetGuestInsideSeatsUseCase";
 import { GetRecentScansUseCase } from "./GetRecentScansUseCase";
 import { ListGuestsWithStatusUseCase } from "./ListGuestsWithStatusUseCase";
 import { UndoLastScanUseCase } from "./UndoLastScanUseCase";
+import { RecordScanUseCase } from "./RecordScanUseCase";
 
 class FakeScanRepository implements IScanRepository {
   scans: ScanEvent[] = [];
@@ -40,8 +41,12 @@ class FakeScanRepository implements IScanRepository {
     return true;
   }
 
-  async insideSeatsForGuest(): Promise<number> {
-    return 0;
+  async insideSeatsForGuest(guestId: number): Promise<number> {
+    return this.scans
+      .filter((s) => s.guestId === guestId)
+      .reduce((seats, scan) => {
+        return scan.direction === "in" ? seats + scan.seats : seats - scan.seats;
+      }, 0);
   }
 
   async listGuestsWithStatus(): Promise<GuestWithStatus[]> {
@@ -86,5 +91,125 @@ describe("check-in use-cases", () => {
     expect(await new GetArrivalBucketsUseCase(repo).execute(1)).toEqual(repo.buckets);
     expect(await new GetRecentScansUseCase(repo).execute(1)).toEqual(repo.recent);
     expect(await new GetGuestInsideSeatsUseCase(repo).execute(1)).toBe(0);
+  });
+});
+
+describe("RecordScanUseCase", () => {
+  it("checks a guest in for their full party size when outside", async () => {
+    const repo = new FakeScanRepository();
+    const result = await new RecordScanUseCase(repo).execute({
+      guestId: 1,
+      partySeats: 3,
+      direction: "in",
+      method: "qr",
+      seats: 3,
+      scannedBy: "door",
+      override: false,
+    });
+
+    expect(result).toEqual({
+      outcome: "recorded",
+      scan: expect.objectContaining({ guestId: 1, direction: "in", seats: 3 }),
+      insideSeats: 3,
+    });
+  });
+
+  it("clamps a check-in to the remaining seats when the requested count is too high", async () => {
+    const repo = new FakeScanRepository();
+    await repo.record({ guestId: 1, direction: "in", method: "qr", seats: 2, scannedBy: "door", override: false });
+
+    const result = await new RecordScanUseCase(repo).execute({
+      guestId: 1,
+      partySeats: 3,
+      direction: "in",
+      method: "manual",
+      seats: 99,
+      scannedBy: "door",
+      override: false,
+    });
+
+    expect(result).toEqual({
+      outcome: "recorded",
+      scan: expect.objectContaining({ seats: 1 }),
+      insideSeats: 3,
+    });
+  });
+
+  it("blocks a check-in when the party is already fully inside, unless overridden", async () => {
+    const repo = new FakeScanRepository();
+    await repo.record({ guestId: 1, direction: "in", method: "qr", seats: 2, scannedBy: "door", override: false });
+
+    const blocked = await new RecordScanUseCase(repo).execute({
+      guestId: 1,
+      partySeats: 2,
+      direction: "in",
+      method: "qr",
+      seats: 2,
+      scannedBy: "door",
+      override: false,
+    });
+    expect(blocked).toEqual({ outcome: "blocked", reason: "already_full", insideSeats: 2 });
+
+    const overridden = await new RecordScanUseCase(repo).execute({
+      guestId: 1,
+      partySeats: 2,
+      direction: "in",
+      method: "qr",
+      seats: 2,
+      scannedBy: "door",
+      override: true,
+    });
+    expect(overridden).toEqual({
+      outcome: "recorded",
+      scan: expect.objectContaining({ seats: 2, override: true }),
+      insideSeats: 4,
+    });
+  });
+
+  it("checks a guest out, clamped to the seats currently inside", async () => {
+    const repo = new FakeScanRepository();
+    await repo.record({ guestId: 1, direction: "in", method: "qr", seats: 3, scannedBy: "door", override: false });
+
+    const result = await new RecordScanUseCase(repo).execute({
+      guestId: 1,
+      partySeats: 3,
+      direction: "out",
+      method: "manual",
+      seats: 99,
+      scannedBy: "door",
+      override: false,
+    });
+
+    expect(result).toEqual({
+      outcome: "recorded",
+      scan: expect.objectContaining({ direction: "out", seats: 3 }),
+      insideSeats: 0,
+    });
+  });
+
+  it("blocks a check-out when nobody from the party is inside, unless overridden", async () => {
+    const repo = new FakeScanRepository();
+
+    const blocked = await new RecordScanUseCase(repo).execute({
+      guestId: 1,
+      partySeats: 2,
+      direction: "out",
+      method: "qr",
+      seats: 1,
+      scannedBy: "door",
+      override: false,
+    });
+    expect(blocked).toEqual({ outcome: "blocked", reason: "not_inside", insideSeats: 0 });
+
+    const overridden = await new RecordScanUseCase(repo).execute({
+      guestId: 1,
+      partySeats: 2,
+      direction: "out",
+      method: "qr",
+      seats: 1,
+      scannedBy: "door",
+      override: true,
+    });
+    expect(overridden.outcome).toBe("recorded");
   });
 });
