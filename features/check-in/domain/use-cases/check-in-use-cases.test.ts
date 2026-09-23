@@ -8,6 +8,8 @@ import type {
   ScanEvent,
 } from "../ScanEvent";
 import type { IScanRepository } from "../IScanRepository";
+import type { BulkGuestRow, CreateGuestInput, Guest, UpdateGuestInput } from "@/features/guests/domain/Guest";
+import type { IGuestRepository } from "@/features/guests/domain/IGuestRepository";
 import { GetArrivalBucketsUseCase } from "./GetArrivalBucketsUseCase";
 import { GetEventStatsUseCase } from "./GetEventStatsUseCase";
 import { GetGuestInsideSeatsUseCase } from "./GetGuestInsideSeatsUseCase";
@@ -15,6 +17,38 @@ import { GetRecentScansUseCase } from "./GetRecentScansUseCase";
 import { ListGuestsWithStatusUseCase } from "./ListGuestsWithStatusUseCase";
 import { UndoLastScanUseCase } from "./UndoLastScanUseCase";
 import { RecordScanUseCase } from "./RecordScanUseCase";
+import { AddWalkInGuestUseCase } from "./AddWalkInGuestUseCase";
+
+class FakeGuestRepository implements IGuestRepository {
+  rows: Guest[] = [];
+  private nextId = 1;
+
+  async listForEvent(eventId: number): Promise<Guest[]> {
+    return this.rows.filter((g) => g.eventId === eventId);
+  }
+  async getById(eventId: number, id: number): Promise<Guest | null> {
+    return this.rows.find((g) => g.eventId === eventId && g.id === id) ?? null;
+  }
+  async getByCode(code: string): Promise<Guest | null> {
+    return this.rows.find((g) => g.code === code) ?? null;
+  }
+  async create(input: CreateGuestInput): Promise<Guest> {
+    const guest: Guest = { id: this.nextId++, createdAt: new Date(), ...input };
+    this.rows.push(guest);
+    return guest;
+  }
+  async createMany(eventId: number, rows: BulkGuestRow[]): Promise<number> {
+    for (const row of rows) await this.create({ ...row, eventId, source: "invited" });
+    return rows.length;
+  }
+  async update(eventId: number, id: number, input: UpdateGuestInput): Promise<void> {
+    const guest = await this.getById(eventId, id);
+    if (guest) Object.assign(guest, input);
+  }
+  async delete(eventId: number, id: number): Promise<void> {
+    this.rows = this.rows.filter((g) => !(g.eventId === eventId && g.id === id));
+  }
+}
 
 class FakeScanRepository implements IScanRepository {
   scans: ScanEvent[] = [];
@@ -211,5 +245,33 @@ describe("RecordScanUseCase", () => {
       override: true,
     });
     expect(overridden.outcome).toBe("recorded");
+  });
+});
+
+describe("AddWalkInGuestUseCase", () => {
+  it("creates a walk-in guest with a generated code and checks them in as a manual entry", async () => {
+    const guests = new FakeGuestRepository();
+    const scans = new FakeScanRepository();
+
+    const result = await new AddWalkInGuestUseCase(guests, scans).execute({
+      eventId: 7,
+      name: "Family of Samir",
+      seats: 4,
+      scannedBy: "door",
+    });
+
+    expect(result.guest).toMatchObject({ eventId: 7, name: "Family of Samir", seats: 4, source: "walk_in" });
+    expect(result.guest.code).toHaveLength(10);
+    expect(result.insideSeats).toBe(4);
+
+    expect(scans.scans).toHaveLength(1);
+    expect(scans.scans[0]).toMatchObject({
+      guestId: result.guest.id,
+      direction: "in",
+      method: "manual",
+      seats: 4,
+      scannedBy: "door",
+      override: false,
+    });
   });
 });
