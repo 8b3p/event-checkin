@@ -93,7 +93,7 @@ export default function GuestSearchPanel({
                     </p>
                   </div>
                   <Button type="button" size="sm" onClick={() => onResolve(guest.id)}>
-                    {outside ? "تسجيل دخول" : "تسجيل خروج"}
+                    {outside ? "تسجيل دخول" : full ? "تسجيل خروج" : "دخول / خروج"}
                   </Button>
                 </li>
               );

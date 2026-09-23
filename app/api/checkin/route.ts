@@ -17,9 +17,13 @@ export type ResolveResult =
   | {
       status: "resolved";
       guest: { id: number; name: string; seats: number; note: string | null };
-      direction: ScanDirection;
       insideSeats: number;
-      defaultSeats: number;
+      /** Non-null whenever some of the party is still outside (insideSeats < seats). */
+      canCheckIn: { defaultSeats: number } | null;
+      /** Non-null whenever some of the party is inside (insideSeats > 0). A partially
+       * arrived party gets both, so staff can admit the rest OR let the ones already
+       * inside leave early. */
+      canCheckOut: { defaultSeats: number } | null;
     };
 
 export type CommitResult =
@@ -57,15 +61,15 @@ export async function POST(request: Request): Promise<Response> {
 
   const scanRepository = makeScanRepository();
   const insideSeats = await new GetGuestInsideSeatsUseCase(scanRepository).execute(guest.id);
-  const direction: ScanDirection = insideSeats < guest.seats ? "in" : "out";
-  const defaultSeats = direction === "in" ? guest.seats - insideSeats : insideSeats;
+  const canCheckIn = insideSeats < guest.seats ? { defaultSeats: guest.seats - insideSeats } : null;
+  const canCheckOut = insideSeats > 0 ? { defaultSeats: insideSeats } : null;
 
   return Response.json({
     status: "resolved",
     guest: { id: guest.id, name: guest.name, seats: guest.seats, note: guest.note },
-    direction,
     insideSeats,
-    defaultSeats,
+    canCheckIn,
+    canCheckOut,
   } satisfies ResolveResult);
 }
 
