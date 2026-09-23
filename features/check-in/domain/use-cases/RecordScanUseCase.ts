@@ -1,7 +1,7 @@
 import type { ScanDirection, ScanEvent, ScanMethod } from "../ScanEvent";
 import type { IScanRepository } from "../IScanRepository";
 
-export type RecordScanInput = {
+export type RecordScanUseCaseInput = {
   guestId: number;
   /** The guest's party size — needed to cap how many seats a check-in can admit. */
   partySeats: number;
@@ -26,7 +26,7 @@ export type RecordScanResult =
 export class RecordScanUseCase {
   constructor(private readonly scanRepository: IScanRepository) {}
 
-  async execute(input: RecordScanInput): Promise<RecordScanResult> {
+  async execute(input: RecordScanUseCaseInput): Promise<RecordScanResult> {
     const insideSeats = await this.scanRepository.insideSeatsForGuest(input.guestId);
 
     if (input.direction === "in") {
@@ -34,7 +34,14 @@ export class RecordScanUseCase {
         return { outcome: "blocked", reason: "already_full", insideSeats };
       }
       const seats = input.override ? input.seats : Math.min(input.seats, input.partySeats - insideSeats);
-      const scan = await this.scanRepository.record({ ...input, seats });
+      const scan = await this.scanRepository.record({
+        guestId: input.guestId,
+        direction: input.direction,
+        method: input.method,
+        scannedBy: input.scannedBy,
+        override: input.override,
+        seats,
+      });
       return { outcome: "recorded", scan, insideSeats: insideSeats + seats };
     }
 
@@ -42,7 +49,14 @@ export class RecordScanUseCase {
       return { outcome: "blocked", reason: "not_inside", insideSeats };
     }
     const seats = input.override ? input.seats : Math.min(input.seats, insideSeats);
-    const scan = await this.scanRepository.record({ ...input, seats });
+    const scan = await this.scanRepository.record({
+      guestId: input.guestId,
+      direction: input.direction,
+      method: input.method,
+      scannedBy: input.scannedBy,
+      override: input.override,
+      seats,
+    });
     return { outcome: "recorded", scan, insideSeats: insideSeats - seats };
   }
 }
