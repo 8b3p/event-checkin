@@ -42,7 +42,7 @@ export function createInviteCardRenderer(event: Event) {
   return {
     async render(guest: Guest): Promise<Blob> {
       const qr = await QRCode.toDataURL(inviteUrl(guest.code), INVITE_CARD_QR_OPTIONS);
-      flushSync(() => root.render(<InviteCard event={event} guest={guest} qr={qr} />));
+      flushSync(() => root.render(<InviteCard event={event} guest={guest} qr={qr} variant="image" />));
 
       // Reading layout queues the font loads this card's text needs, so `fonts.ready`
       // actually waits for them instead of resolving before they've started.

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommitResult, ResolveResult } from "@/app/api/checkin/route";
 import type { Event } from "@/features/events/domain/Event";
 import type { EventStats, GuestWithStatus, ScanDirection, ScanMethod } from "@/features/check-in/domain/ScanEvent";
+import { normaliseScan } from "@/shared/lib/code-format";
 import { logoutAction } from "@/shared/lib/logout-action";
 import { signalBad, signalGood, signalStop } from "./feedback";
 import GuestSearchPanel from "./GuestSearchPanel";
@@ -189,6 +190,11 @@ export default function Scanner({
           { fps: 10, qrbox: { width: 240, height: 240 } },
           (decoded) => {
             if (pausedRef.current || viewRef.current !== "camera") return;
+            // The camera reads every QR code in frame, not just invite codes — a venue's
+            // own map/wifi signage sharing the shot, a poster in the background. Only an
+            // invite-shaped code is worth a round trip; anything else is ignored so it
+            // doesn't interrupt scanning with an "unknown" error and a bad-scan buzz.
+            if (!normaliseScan(decoded)) return;
 
             const previous = lastScanRef.current;
             const now = Date.now();

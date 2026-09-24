@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateCode, generateCodes, generateDoorCode, normaliseScan } from "./codes";
+import { generateCode, generateCodes, generateDoorCode } from "./codes";
 
 describe("generateCode / generateCodes", () => {
   it("generates a 10-character code from the safe alphabet", () => {
@@ -21,19 +21,5 @@ describe("generateDoorCode", () => {
     expect(code.length).toBeGreaterThanOrEqual(4);
     expect(code.length).toBeLessThanOrEqual(6);
     expect(code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]+$/);
-  });
-});
-
-describe("normaliseScan", () => {
-  it("accepts a bare code in any case", () => {
-    expect(normaliseScan("abc23456j9")).toBe("ABC23456J9");
-  });
-
-  it("extracts the code from a full invite URL", () => {
-    expect(normaliseScan("https://example.com/i/ABC23456J9")).toBe("ABC23456J9");
-  });
-
-  it("rejects the wrong length", () => {
-    expect(normaliseScan("ABC")).toBeNull();
   });
 });

@@ -6,8 +6,22 @@ import type { Guest } from "../domain/Guest";
  * The guest-facing invitation. Rendered on the server for `/i/[code]` and in the
  * owner's browser for the downloadable card image, so the two can't diverge —
  * keep it free of server-only imports.
+ *
+ * `variant="image"` drops what only makes sense on the live page: a map link
+ * can't be tapped in a PNG, and "take a screenshot in case you're offline" is
+ * moot when the card already is one.
  */
-export default function InviteCard({ event, guest, qr }: { event: Event; guest: Guest; qr: string }) {
+export default function InviteCard({
+  event,
+  guest,
+  qr,
+  variant = "page",
+}: {
+  event: Event;
+  guest: Guest;
+  qr: string;
+  variant?: "page" | "image";
+}) {
   const when = event.eventDate
     ? new Date(`${event.eventDate}T00:00:00`).toLocaleDateString("ar-u-nu-latn", {
         weekday: "long",
@@ -24,7 +38,7 @@ export default function InviteCard({ event, guest, qr }: { event: Event; guest: 
         <h1 className="display mt-3 text-4xl leading-tight text-foreground">{event.name}</h1>
         {when ? <p className="mt-3 text-sm text-accent-foreground">{when}</p> : null}
         {event.venue ? <p className="text-sm text-accent-foreground">{event.venue}</p> : null}
-        {event.locationLink ? (
+        {event.locationLink && variant === "page" ? (
           <a
             href={event.locationLink}
             target="_blank"
@@ -54,7 +68,9 @@ export default function InviteCard({ event, guest, qr }: { event: Event; guest: 
           {guest.code}
         </p>
         <p className="mx-auto mt-4 max-w-xs text-sm text-muted-foreground">
-          أظهر هذه الشاشة عند الباب. التقط لقطة شاشة إن لم يكن لديك إنترنت عند الوصول.
+          {variant === "image"
+            ? "احتفظ بهذه البطاقة وأظهرها عند الباب."
+            : "أظهر هذه الشاشة عند الباب. التقط لقطة شاشة إن لم يكن لديك إنترنت عند الوصول."}
         </p>
       </div>
     </article>
