@@ -67,6 +67,9 @@ export default function GuestManager({ event, guests }: { event: Event; guests: 
   const download = useDownloadGuestCardsViewModel(event, visible);
   const downloading = download.state.status === "rendering" || download.state.status === "zipping";
 
+  const totalSeats = guests.reduce((sum, guest) => sum + guest.seats, 0);
+  const visibleSeats = visible.reduce((sum, guest) => sum + guest.seats, 0);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2">
@@ -141,7 +144,7 @@ export default function GuestManager({ event, guests }: { event: Event; guests: 
                   : `تحميل البطاقات (${visible.length})`}
           </Button>
           <p className="ms-auto text-sm text-muted-foreground tabular">
-            {visible.length} من {guests.length}
+            {visible.length} من {guests.length} دعوة · {visibleSeats} من {totalSeats} مقعد
           </p>
         </div>
 
