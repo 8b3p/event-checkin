@@ -12,11 +12,11 @@ import { useDownloadGuestCardViewModel } from "../view-model/useDownloadGuestCar
 function buildMessage(guest: Guest, event: Event, url: string): string {
   const when = event.eventDate
     ? new Date(`${event.eventDate}T00:00:00`).toLocaleDateString("ar-u-nu-latn", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
     : null;
 
   const occasion = [`أنت مدعوة إلى ${event.name}`, when ? ` يوم ${when}` : "", event.venue ? ` في ${event.venue}` : ""].join(
@@ -35,7 +35,7 @@ function buildMessage(guest: Guest, event: Event, url: string): string {
     "",
     `${occasion}.`,
     "",
-    "هذا الرابط هو دعوتك. افتحه وأظهر رمز QR عند الباب:",
+    "هذا الرابط هو دعوتك. افتحيه وأظهري رمز QR عند الباب:",
     url,
     "",
     ...(event.locationLink ? ["الموقع على الخريطة:", event.locationLink, ""] : []),
