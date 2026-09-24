@@ -15,24 +15,57 @@ import type { Guest } from "../domain/Guest";
 import AddGuestForm from "./AddGuestForm";
 import ImportGuestsForm from "./ImportGuestsForm";
 
+type SortField = "name" | "seats" | "note" | "code" | "createdAt";
+type SortDir = "asc" | "desc";
+
+const SORT_OPTIONS: { value: SortField; label: string }[] = [
+  { value: "name", label: "الاسم" },
+  { value: "seats", label: "المقاعد" },
+  { value: "note", label: "الملاحظة" },
+  { value: "code", label: "الرمز" },
+  { value: "createdAt", label: "تاريخ الإضافة" },
+];
+
+function compareGuests(a: Guest, b: Guest, field: SortField): number {
+  switch (field) {
+    case "seats":
+      return a.seats - b.seats;
+    case "createdAt":
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    case "note":
+      return (a.note ?? "").localeCompare(b.note ?? "", "ar");
+    case "code":
+      return a.code.localeCompare(b.code, "ar");
+    case "name":
+      return a.name.localeCompare(b.name, "ar");
+  }
+}
+
 export default function GuestManager({ event, guests }: { event: Event; guests: Guest[] }) {
   const eventId = event.id;
   const [panel, setPanel] = useState<"none" | "one" | "many">("none");
   const [query, setQuery] = useState("");
-  const download = useDownloadGuestCardsViewModel(event, guests);
-  const downloading = download.state.status === "rendering" || download.state.status === "zipping";
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const visible = useMemo(() => {
     const needle = normalizeAr(query.trim());
-    if (!needle) return guests;
+    const filtered = !needle
+      ? guests
+      : guests.filter(
+          (guest) =>
+            normalizeAr(guest.name).includes(needle) ||
+            normalizeAr(guest.note ?? "").includes(needle) ||
+            normalizeAr(guest.code).includes(needle) ||
+            String(guest.seats).includes(needle),
+        );
 
-    return guests.filter(
-      (guest) =>
-        normalizeAr(guest.name).includes(needle) ||
-        normalizeAr(guest.note ?? "").includes(needle) ||
-        normalizeAr(guest.code).includes(needle),
-    );
-  }, [guests, query]);
+    const sign = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => sign * compareGuests(a, b, sortField));
+  }, [guests, query, sortField, sortDir]);
+
+  const download = useDownloadGuestCardsViewModel(event, visible);
+  const downloading = download.state.status === "rendering" || download.state.status === "zipping";
 
   return (
     <div className="space-y-5">
@@ -59,9 +92,33 @@ export default function GuestManager({ event, guests }: { event: Event; guests: 
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="ابحث بالاسم أو الملاحظة أو الرمز"
+            placeholder="ابحث بالاسم أو الملاحظة أو الرمز أو المقاعد"
             className="max-w-xs"
           />
+          <div className="flex items-center gap-1.5">
+            <select
+              value={sortField}
+              onChange={(event) => setSortField(event.target.value as SortField)}
+              aria-label="ترتيب حسب"
+              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setSortDir((dir) => (dir === "asc" ? "desc" : "asc"))}
+              aria-label={sortDir === "asc" ? "ترتيب تصاعدي" : "ترتيب تنازلي"}
+              title={sortDir === "asc" ? "تصاعدي" : "تنازلي"}
+            >
+              {sortDir === "asc" ? "↑" : "↓"}
+            </Button>
+          </div>
           <a
             href={`/events/${eventId}/guests/export`}
             className="text-sm text-muted-foreground hover:text-foreground"
@@ -72,14 +129,16 @@ export default function GuestManager({ event, guests }: { event: Event; guests: 
             type="button"
             variant="link"
             className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-            disabled={downloading}
+            disabled={downloading || visible.length === 0}
             onClick={download.download}
           >
             {download.state.status === "rendering"
               ? `جارٍ التحضير… (${download.state.done} / ${download.state.total})`
               : download.state.status === "zipping"
                 ? "جارٍ الضغط…"
-                : "تحميل كل البطاقات"}
+                : visible.length === guests.length
+                  ? "تحميل كل البطاقات"
+                  : `تحميل البطاقات (${visible.length})`}
           </Button>
           <p className="ms-auto text-sm text-muted-foreground tabular">
             {visible.length} من {guests.length}
