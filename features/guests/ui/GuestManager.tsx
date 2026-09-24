@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import type { Event } from "@/features/events/domain/Event";
 import { Button } from "@/shared/component/ui/button";
 import { Card } from "@/shared/component/ui/card";
 import { EmptyState } from "@/shared/component/empty-state";
@@ -14,11 +15,12 @@ import type { Guest } from "../domain/Guest";
 import AddGuestForm from "./AddGuestForm";
 import ImportGuestsForm from "./ImportGuestsForm";
 
-export default function GuestManager({ eventId, guests }: { eventId: number; guests: Guest[] }) {
+export default function GuestManager({ event, guests }: { event: Event; guests: Guest[] }) {
+  const eventId = event.id;
   const [panel, setPanel] = useState<"none" | "one" | "many">("none");
   const [query, setQuery] = useState("");
-  const download = useDownloadGuestCardsViewModel(eventId);
-  const downloading = download.state.status === "downloading";
+  const download = useDownloadGuestCardsViewModel(event, guests);
+  const downloading = download.state.status === "rendering" || download.state.status === "zipping";
 
   const visible = useMemo(() => {
     const needle = normalizeAr(query.trim());
@@ -73,9 +75,11 @@ export default function GuestManager({ eventId, guests }: { eventId: number; gue
             disabled={downloading}
             onClick={download.download}
           >
-            {download.state.status === "downloading"
-              ? `جارٍ التحضير… (${download.formatBytes(download.state.bytes)})`
-              : "تحميل كل البطاقات"}
+            {download.state.status === "rendering"
+              ? `جارٍ التحضير… (${download.state.done} / ${download.state.total})`
+              : download.state.status === "zipping"
+                ? "جارٍ الضغط…"
+                : "تحميل كل البطاقات"}
           </Button>
           <p className="ms-auto text-sm text-muted-foreground tabular">
             {visible.length} من {guests.length}

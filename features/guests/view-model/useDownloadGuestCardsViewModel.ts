@@ -1,71 +1,70 @@
 "use client";
 
+import JSZip from "jszip";
 import { useCallback, useState } from "react";
+import type { Event } from "@/features/events/domain/Event";
+import { cardFileName } from "@/shared/lib/card-file-name";
+import { saveBlob } from "@/shared/lib/save-blob";
+import type { Guest } from "../domain/Guest";
+import { createInviteCardRenderer } from "./invite-card-renderer";
 
 type DownloadState =
   | { status: "idle" }
-  | { status: "downloading"; bytes: number }
+  | { status: "rendering"; done: number; total: number }
+  | { status: "zipping" }
   | { status: "error"; message: string };
 
-const FALLBACK_ERROR = "تعذر تحميل البطاقات. تحقق من الاتصال وحاول مرة أخرى.";
+const FALLBACK_ERROR = "تعذر تحميل البطاقات. حاول مرة أخرى.";
 
-function formatBytes(bytes: number): string {
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 1) return `${mb.toFixed(1)} م.ب`;
-  return `${Math.max(1, Math.round(bytes / 1024))} ك.ب`;
-}
-
-function filenameFromContentDisposition(header: string | null): string {
-  const utf8Match = header?.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match) return decodeURIComponent(utf8Match[1]);
-  const asciiMatch = header?.match(/filename="([^"]+)"/i);
-  return asciiMatch ? asciiMatch[1] : "cards.zip";
-}
-
-export function useDownloadGuestCardsViewModel(eventId: number) {
+export function useDownloadGuestCardsViewModel(event: Event, guests: Guest[]) {
   const [state, setState] = useState<DownloadState>({ status: "idle" });
 
   const download = useCallback(async () => {
-    setState({ status: "downloading", bytes: 0 });
+    const total = guests.length;
+    setState({ status: "rendering", done: 0, total });
+
+    const zip = new JSZip();
+    const skipped: string[] = [];
+    const renderer = createInviteCardRenderer(event);
 
     try {
-      const response = await fetch(`/events/${eventId}/guests/cards`);
-
-      if (!response.ok) {
-        const body: { error?: string } | null = await response.json().catch(() => null);
-        setState({ status: "error", message: body?.error ?? FALLBACK_ERROR });
-        return;
+      // Serial: the renderer reuses one off-screen root. A failed card is listed in the
+      // notes file and left out, rather than zipped as a blank image that looks real.
+      for (const [index, guest] of guests.entries()) {
+        try {
+          zip.file(cardFileName(guest), await renderer.render(guest));
+        } catch (error) {
+          console.error(`Failed to render guest card for ${guest.name}:`, error);
+          skipped.push(guest.name);
+        }
+        setState({ status: "rendering", done: index + 1, total });
+        // Yield a frame so the counter paints and the tab stays responsive.
+        await new Promise(requestAnimationFrame);
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("ReadableStream not supported");
+      // Encoded to UTF-8 bytes ourselves rather than handed to JSZip as a plain string,
+      // which it may store as raw UTF-16 code units and corrupt the Arabic text.
+      zip.file(
+        "ملاحظات.txt",
+        new TextEncoder().encode(
+          skipped.length === 0
+            ? "تم إنشاء جميع البطاقات بنجاح."
+            : `تعذر إنشاء بطاقات الدعوات التالية، حاول تحميلها يدوياً من صفحة كل دعوة:\n${skipped.join("\n")}`,
+        ),
+      );
 
-      const chunks: Uint8Array[] = [];
-      let bytes = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        bytes += value.length;
-        setState({ status: "downloading", bytes });
-      }
-
-      const blob = new Blob(chunks as BlobPart[], { type: "application/zip" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filenameFromContentDisposition(response.headers.get("Content-Disposition"));
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-
+      setState({ status: "zipping" });
+      // PNGs are already deflate-compressed; recompressing them costs time for ~no gain.
+      const blob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+      saveBlob(blob, `بطاقات-${event.id}.zip`);
       setState({ status: "idle" });
     } catch (error) {
-      console.error("Failed to download guest cards:", error);
+      console.error("Failed to build guest cards ZIP:", error);
       setState({ status: "error", message: FALLBACK_ERROR });
+    } finally {
+      renderer.dispose();
     }
-  }, [eventId]);
+  }, [event, guests]);
 
-  return { state, download, formatBytes };
+  return { state, download };
 }

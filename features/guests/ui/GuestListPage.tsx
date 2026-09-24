@@ -25,7 +25,7 @@ export default function GuestListPage({ event, guests }: { event: Event; guests:
         />
       </div>
 
-      <GuestManager eventId={event.id} guests={guests} />
+      <GuestManager event={event} guests={guests} />
     </Shell>
   );
 }
