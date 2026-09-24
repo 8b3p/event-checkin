@@ -5,9 +5,9 @@ import { GetEventUseCase } from "@/features/events/domain/use-cases/GetEventUseC
 import { makeEventRepository } from "@/features/events/infrastructure/factory";
 import { GetGuestByCodeUseCase } from "@/features/guests/domain/use-cases/GetGuestByCodeUseCase";
 import { makeGuestRepository } from "@/features/guests/infrastructure/factory";
+import InviteCard from "@/features/guests/ui/InviteCard";
 import { normaliseScan } from "@/shared/lib/codes";
 import { INVITE_CARD_QR_OPTIONS, inviteUrl } from "@/shared/lib/invite-url";
-import { pluralizeAr } from "@/shared/lib/pluralize-ar";
 
 export const dynamic = "force-dynamic";
 
@@ -39,57 +39,9 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
 
   const qr = await QRCode.toDataURL(inviteUrl(guest.code), INVITE_CARD_QR_OPTIONS);
 
-  const when = event.eventDate
-    ? new Date(`${event.eventDate}T00:00:00`).toLocaleDateString("ar-u-nu-latn", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : null;
-
   return (
     <main dir="rtl" className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-12">
-      <article data-testid="invite-card" className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="border-b border-border bg-accent px-6 py-8 text-center">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-accent-foreground">أنت مدعوة</p>
-          <h1 className="display mt-3 text-4xl leading-tight text-foreground">{event.name}</h1>
-          {when ? <p className="mt-3 text-sm text-accent-foreground">{when}</p> : null}
-          {event.venue ? <p className="text-sm text-accent-foreground">{event.venue}</p> : null}
-          {event.locationLink ? (
-            <a
-              href={event.locationLink}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-block text-sm font-medium text-accent-foreground underline underline-offset-2"
-            >
-              الموقع على الخريطة
-            </a>
-          ) : null}
-        </div>
-
-        <div className="px-6 py-8 text-center">
-          <p className="text-sm text-muted-foreground">هذه الدعوة لـ</p>
-          <p className="display mt-1 text-2xl text-foreground">{guest.name}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            تشمل {pluralizeAr(guest.seats, { one: "شخصاً واحداً", two: "شخصين", few: "أشخاص", many: "شخصاً" })}
-          </p>
-
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={qr}
-            alt="رمز QR الخاص بدخولك"
-            className="mx-auto mt-6 h-64 w-64 rounded-xl border border-border bg-white p-3"
-          />
-
-          <p dir="ltr" className="mt-4 font-mono text-sm tracking-[0.2em] text-muted-foreground">
-            {guest.code}
-          </p>
-          <p className="mx-auto mt-4 max-w-xs text-sm text-muted-foreground">
-            أظهر هذه الشاشة عند الباب. التقط لقطة شاشة إن لم يكن لديك إنترنت عند الوصول.
-          </p>
-        </div>
-      </article>
+      <InviteCard event={event} guest={guest} qr={qr} />
 
       <p className="mt-6 text-center text-xs text-muted-foreground">احتفظ بهذا الرابط لنفسك — إنه ما يتيح لك الدخول.</p>
     </main>
