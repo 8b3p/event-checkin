@@ -5,7 +5,7 @@ import { makeEventRepository } from "@/features/events/infrastructure/factory";
 import { ListGuestsForEventUseCase } from "@/features/guests/domain/use-cases/ListGuestsForEventUseCase";
 import { makeGuestRepository } from "@/features/guests/infrastructure/factory";
 import { requireOwner } from "@/shared/lib/guard";
-import { renderGuestCardImage } from "../[guestId]/card/render-card";
+import { launchCardBrowser, renderGuestCardImageOnBrowser } from "../[guestId]/card/render-card";
 
 export const maxDuration = 300;
 
@@ -17,10 +17,13 @@ export const maxDuration = 300;
 // owner's browser hang.
 const MAX_GUESTS_FOR_BULK_CARDS = 600;
 
-// Pages share one browser process, so this is bounded by memory, not CPU: each open tab
-// costs real RAM, and the function's memory ceiling (not the 300s time budget) is what
-// caps how high this can safely go.
-const CARD_RENDER_CONCURRENCY = 4;
+// @sparticuz/chromium runs Chromium with --single-process (required to avoid a Lambda/
+// Vercel sandbox error), which means one browser instance can only safely drive one page
+// at a time — concurrent pages on the same instance crash it. So this isn't a page pool
+// sharing one browser; it's N independent browser processes, each rendering its guests
+// serially. That makes it memory-bound by full Chromium instances rather than by tabs,
+// hence the lower number than a normal page-pool would use.
+const CARD_RENDER_CONCURRENCY = 2;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireOwner();
@@ -57,24 +60,31 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const skipped: string[] = [];
 
   // A fixed-size pool of workers pulls from the shared `nextIndex` cursor, so at most
-  // CARD_RENDER_CONCURRENCY browser tabs are open at once regardless of guest count.
-  // Write order into `zip`/`skipped` doesn't matter — a ZIP's entries are named
-  // independently — so unordered completion across workers is fine.
+  // CARD_RENDER_CONCURRENCY guests are being rendered at once regardless of guest count.
+  // Each worker launches its own browser and reuses it serially for every guest it draws —
+  // never two pages on the same browser at once (see the single-process note above). Write
+  // order into `zip`/`skipped` doesn't matter — a ZIP's entries are named independently —
+  // so unordered completion across workers is fine.
   let nextIndex = 0;
   async function renderWorker() {
-    for (;;) {
-      const i = nextIndex++;
-      if (i >= guests.length) return;
-      const guest = guests[i];
-      const cardName = `${guest.name}-${guest.code}.png`;
-      try {
-        const image = await renderGuestCardImage(guest);
-        zip.file(cardName, await image.arrayBuffer());
-      } catch (error) {
-        console.error(`Failed to render guest card for ${cardName}:`, error);
-        skipped.push(guest.name);
-        zip.file(cardName, BLANK_PLACEHOLDER_PNG);
+    const browser = await launchCardBrowser();
+    try {
+      for (;;) {
+        const i = nextIndex++;
+        if (i >= guests.length) return;
+        const guest = guests[i];
+        const cardName = `${guest.name}-${guest.code}.png`;
+        try {
+          const image = await renderGuestCardImageOnBrowser(browser, guest);
+          zip.file(cardName, await image.arrayBuffer());
+        } catch (error) {
+          console.error(`Failed to render guest card for ${cardName}:`, error);
+          skipped.push(guest.name);
+          zip.file(cardName, BLANK_PLACEHOLDER_PNG);
+        }
       }
+    } finally {
+      await browser.close();
     }
   }
 
