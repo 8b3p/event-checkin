@@ -21,7 +21,7 @@ export async function generateMetadata({
   const event = guest ? await new GetEventUseCase(makeEventRepository()).execute(guest.eventId) : null;
 
   return {
-    title: event ? `أنت مدعو — ${event.name}` : "دعوة",
+    title: event ? `أنت مدعوة — ${event.name}` : "دعوة",
     robots: { index: false, follow: false },
   };
 }
@@ -49,9 +49,9 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
 
   return (
     <main dir="rtl" className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-12">
-      <article className="overflow-hidden rounded-2xl border border-border bg-card">
+      <article data-testid="invite-card" className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="border-b border-border bg-accent px-6 py-8 text-center">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-accent-foreground">أنت مدعو</p>
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-accent-foreground">أنت مدعوة</p>
           <h1 className="display mt-3 text-4xl leading-tight text-foreground">{event.name}</h1>
           {when ? <p className="mt-3 text-sm text-accent-foreground">{when}</p> : null}
           {event.venue ? <p className="text-sm text-accent-foreground">{event.venue}</p> : null}

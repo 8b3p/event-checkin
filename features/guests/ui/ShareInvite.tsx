@@ -17,7 +17,7 @@ function buildMessage(guest: Guest, event: Event, url: string): string {
       })
     : null;
 
-  const occasion = [`أنت مدعو إلى ${event.name}`, when ? ` يوم ${when}` : "", event.venue ? ` في ${event.venue}` : ""].join(
+  const occasion = [`أنت مدعوة إلى ${event.name}`, when ? ` يوم ${when}` : "", event.venue ? ` في ${event.venue}` : ""].join(
     "",
   );
 

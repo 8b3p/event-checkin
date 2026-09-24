@@ -20,5 +20,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const guest = await new GetGuestUseCase(makeGuestRepository()).execute(eventId, numericGuestId);
   if (!guest) notFound();
 
-  return renderGuestCardImage(event, guest);
+  return renderGuestCardImage(guest);
 }
