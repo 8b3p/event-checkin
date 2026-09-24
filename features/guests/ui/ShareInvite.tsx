@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { Button } from "@/shared/component/ui/button";
 import { Card, CardHeader, CardTitle } from "@/shared/component/ui/card";
+import { ErrorNote } from "@/shared/component/error-note";
 import type { Event } from "@/features/events/domain/Event";
 import { pluralizeAr } from "@/shared/lib/pluralize-ar";
 import type { Guest } from "../domain/Guest";
+import { useDownloadGuestCardViewModel } from "../view-model/useDownloadGuestCardViewModel";
 
 function buildMessage(guest: Guest, event: Event, url: string): string {
   const when = event.eventDate
@@ -53,6 +55,7 @@ export default function ShareInvite({
   qr: string;
 }) {
   const [copied, setCopied] = useState<"link" | "message" | null>(null);
+  const cardDownload = useDownloadGuestCardViewModel(event, guest);
   const message = buildMessage(guest, event, url);
 
   async function copy(what: "link" | "message") {
@@ -103,13 +106,9 @@ export default function ShareInvite({
           >
             تحميل QR
           </a>
-          <a
-            href={`/events/${event.id}/guests/${guest.id}/card`}
-            download={`دعوة-${guest.code}.png`}
-            className="inline-flex h-9 items-center rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted"
-          >
-            تحميل البطاقة
-          </a>
+          <Button variant="outline" disabled={cardDownload.state.status === "rendering"} onClick={cardDownload.download}>
+            {cardDownload.state.status === "rendering" ? "جارٍ التحضير…" : "تحميل البطاقة"}
+          </Button>
           {guest.phone ? (
             <a
               href={whatsapp}
@@ -121,6 +120,8 @@ export default function ShareInvite({
             </a>
           ) : null}
         </div>
+
+        {cardDownload.state.status === "error" ? <ErrorNote>{cardDownload.state.message}</ErrorNote> : null}
 
         <details className="group">
           <summary className="cursor-pointer list-none text-sm text-muted-foreground hover:text-foreground">
