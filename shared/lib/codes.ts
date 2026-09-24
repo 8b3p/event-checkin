@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 
+export { inviteUrl } from "./invite-url";
+
 /**
  * Alphabet with the characters people misread removed (0/O, 1/I/L).
  * Codes end up in QR images but also get read aloud at the door when a
@@ -50,15 +52,4 @@ export function normaliseScan(raw: string): string | null {
   if (![...candidate].every((char) => ALPHABET.includes(char))) return null;
 
   return candidate;
-}
-
-export function inviteUrl(code: string): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL;
-  if (!configured && process.env.NODE_ENV === "production") {
-    throw new Error(
-      "NEXT_PUBLIC_APP_URL is not set in production — guest invitation links would point at localhost.",
-    );
-  }
-  const base = (configured ?? "http://localhost:3000").replace(/\/$/, "");
-  return `${base}/i/${code}`;
 }

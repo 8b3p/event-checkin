@@ -5,7 +5,8 @@ import { GetEventUseCase } from "@/features/events/domain/use-cases/GetEventUseC
 import { makeEventRepository } from "@/features/events/infrastructure/factory";
 import { GetGuestByCodeUseCase } from "@/features/guests/domain/use-cases/GetGuestByCodeUseCase";
 import { makeGuestRepository } from "@/features/guests/infrastructure/factory";
-import { inviteUrl, normaliseScan } from "@/shared/lib/codes";
+import { normaliseScan } from "@/shared/lib/codes";
+import { INVITE_CARD_QR_OPTIONS, inviteUrl } from "@/shared/lib/invite-url";
 import { pluralizeAr } from "@/shared/lib/pluralize-ar";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
   const event = await new GetEventUseCase(makeEventRepository()).execute(guest.eventId);
   if (!event) notFound();
 
-  const qr = await QRCode.toDataURL(inviteUrl(guest.code), { errorCorrectionLevel: "M", margin: 1, width: 900 });
+  const qr = await QRCode.toDataURL(inviteUrl(guest.code), INVITE_CARD_QR_OPTIONS);
 
   const when = event.eventDate
     ? new Date(`${event.eventDate}T00:00:00`).toLocaleDateString("ar-u-nu-latn", {

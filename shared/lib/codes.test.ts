@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { generateCode, generateCodes, generateDoorCode, inviteUrl, normaliseScan } from "./codes";
+import { describe, expect, it } from "vitest";
+import { generateCode, generateCodes, generateDoorCode, normaliseScan } from "./codes";
 
 describe("generateCode / generateCodes", () => {
   it("generates a 10-character code from the safe alphabet", () => {
@@ -35,24 +35,5 @@ describe("normaliseScan", () => {
 
   it("rejects the wrong length", () => {
     expect(normaliseScan("ABC")).toBeNull();
-  });
-});
-
-describe("inviteUrl", () => {
-  const original = process.env.NEXT_PUBLIC_APP_URL;
-
-  afterEach(() => {
-    if (original === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
-    else process.env.NEXT_PUBLIC_APP_URL = original;
-  });
-
-  it("falls back to http://localhost:3000 when NEXT_PUBLIC_APP_URL is unset", () => {
-    delete process.env.NEXT_PUBLIC_APP_URL;
-    expect(inviteUrl("ABC23456J9")).toBe("http://localhost:3000/i/ABC23456J9");
-  });
-
-  it("builds the invite URL from NEXT_PUBLIC_APP_URL when set", () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://example.com";
-    expect(inviteUrl("ABC23456J9")).toBe("https://example.com/i/ABC23456J9");
   });
 });
