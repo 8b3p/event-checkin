@@ -4,9 +4,11 @@ import { makeGuestRepository } from "@/features/guests/infrastructure/factory";
 import type { Guest } from "@/features/guests/domain/Guest";
 import { GetEventStatsUseCase } from "@/features/check-in/domain/use-cases/GetEventStatsUseCase";
 import { GetGuestInsideSeatsUseCase } from "@/features/check-in/domain/use-cases/GetGuestInsideSeatsUseCase";
+import { ListGuestsWithStatusUseCase } from "@/features/check-in/domain/use-cases/ListGuestsWithStatusUseCase";
 import { RecordScanUseCase } from "@/features/check-in/domain/use-cases/RecordScanUseCase";
+import { RecordSyncedScanUseCase } from "@/features/check-in/domain/use-cases/RecordSyncedScanUseCase";
 import { makeScanRepository } from "@/features/check-in/infrastructure/factory";
-import type { EventStats, ScanDirection, ScanMethod } from "@/features/check-in/domain/ScanEvent";
+import type { EventStats, GuestWithStatus, ScanDirection, ScanMethod } from "@/features/check-in/domain/ScanEvent";
 import { normaliseScan } from "@/shared/lib/codes";
 import { getSession } from "@/shared/lib/session-cookie";
 import type { Session } from "@/features/auth/domain/Session";
@@ -32,6 +34,12 @@ export type CommitResult =
   | { status: "blocked"; reason: "already_full" | "not_inside"; insideSeats: number }
   | { status: "recorded"; insideSeats: number; stats: EventStats };
 
+/** GET response for the offline sync engine's periodic/reconnect refresh —
+ * see spec §6.6-§6.7. */
+export type SnapshotResult =
+  | { status: "unauthorized" }
+  | { status: "ok"; guests: GuestWithStatus[]; stats: EventStats; syncedAt: string };
+
 /** Route Handlers hit by background `fetch()` can't use requireDoor()'s
  * redirect() — a redirect response would just be followed transparently by
  * fetch instead of surfacing as "you're logged out". Return 401 JSON instead;
@@ -39,6 +47,28 @@ export type CommitResult =
 async function requireDoorSession(): Promise<Extract<Session, { role: "door" }> | null> {
   const session = await getSession();
   return session?.role === "door" ? session : null;
+}
+
+/** Snapshot for the offline sync engine: a fresh guest-list + stats read,
+ * used to seed the local cache on `/scan` mount and to refresh it on
+ * reconnect (spec §6.6-§6.7). No write path — read-only, same guard as
+ * the page itself already applies server-side via `requireDoor()`. */
+export async function GET(): Promise<Response> {
+  const session = await requireDoorSession();
+  if (!session) return Response.json({ status: "unauthorized" } satisfies SnapshotResult, { status: 401 });
+
+  const scanRepository = makeScanRepository();
+  const [guests, stats] = await Promise.all([
+    new ListGuestsWithStatusUseCase(scanRepository).execute(session.eventId),
+    new GetEventStatsUseCase(scanRepository).execute(session.eventId),
+  ]);
+
+  return Response.json({
+    status: "ok",
+    guests,
+    stats,
+    syncedAt: new Date().toISOString(),
+  } satisfies SnapshotResult);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -83,12 +113,32 @@ export async function PATCH(request: Request): Promise<Response> {
   const seats = Math.max(1, Number.parseInt(String(body.seats ?? "1"), 10) || 1);
   const override = Boolean(body.override);
   const method: ScanMethod = body.method === "manual" ? "manual" : "qr";
+  const clientScanId = typeof body.clientScanId === "string" && body.clientScanId ? body.clientScanId : null;
 
   const guestRepository = makeGuestRepository();
   const guest = await new GetGuestUseCase(guestRepository).execute(session.eventId, guestId);
   if (!guest) return Response.json({ status: "not_found" } satisfies CommitResult, { status: 404 });
 
   const scanRepository = makeScanRepository();
+
+  // A scan carrying a clientScanId was already decided on-device (live or
+  // offline) — it's a sync delivery, not a fresh interactive commit, so it
+  // is recorded unconditionally and deduped by that key instead of
+  // re-running the blocking guard. See spec §6.8.
+  if (clientScanId) {
+    const synced = await new RecordSyncedScanUseCase(scanRepository).execute({
+      guestId: guest.id,
+      direction,
+      method,
+      seats,
+      scannedBy: "door",
+      override,
+      clientScanId,
+    });
+    const stats = await new GetEventStatsUseCase(scanRepository).execute(session.eventId);
+    return Response.json({ status: "recorded", insideSeats: synced.insideSeats, stats } satisfies CommitResult);
+  }
+
   const result = await new RecordScanUseCase(scanRepository).execute({
     guestId: guest.id,
     partySeats: guest.seats,

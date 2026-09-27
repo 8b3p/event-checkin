@@ -17,6 +17,7 @@ import { GetRecentScansUseCase } from "./GetRecentScansUseCase";
 import { ListGuestsWithStatusUseCase } from "./ListGuestsWithStatusUseCase";
 import { UndoLastScanUseCase } from "./UndoLastScanUseCase";
 import { RecordScanUseCase } from "./RecordScanUseCase";
+import { RecordSyncedScanUseCase } from "./RecordSyncedScanUseCase";
 import { AddWalkInGuestUseCase } from "./AddWalkInGuestUseCase";
 
 class FakeGuestRepository implements IGuestRepository {
@@ -249,6 +250,72 @@ describe("RecordScanUseCase", () => {
       override: true,
     });
     expect(overridden.outcome).toBe("recorded");
+  });
+});
+
+describe("RecordSyncedScanUseCase", () => {
+  it("records exactly the requested seats unconditionally, even if it would otherwise be blocked", async () => {
+    const repo = new FakeScanRepository();
+    await repo.record({ guestId: 1, direction: "in", method: "qr", seats: 2, scannedBy: "door", override: false });
+
+    // partySeats would be 2 in the live guard, so this would normally be
+    // blocked as already_full — the sync path has no partySeats input at
+    // all, because it never runs that guard.
+    const result = await new RecordSyncedScanUseCase(repo).execute({
+      guestId: 1,
+      direction: "in",
+      method: "qr",
+      seats: 2,
+      scannedBy: "door",
+      override: false,
+      clientScanId: "scan-1",
+    });
+
+    expect(result).toEqual({ insideSeats: 4 });
+    expect(repo.scans).toHaveLength(2);
+    expect(repo.scans[1]).toMatchObject({ seats: 2, override: false, clientScanId: "scan-1" });
+  });
+
+  it("is a no-op on a repeated clientScanId instead of inserting a second row", async () => {
+    const repo = new FakeScanRepository();
+
+    const first = await new RecordSyncedScanUseCase(repo).execute({
+      guestId: 1,
+      direction: "in",
+      method: "qr",
+      seats: 3,
+      scannedBy: "door",
+      override: false,
+      clientScanId: "scan-1",
+    });
+
+    const second = await new RecordSyncedScanUseCase(repo).execute({
+      guestId: 1,
+      direction: "in",
+      method: "qr",
+      seats: 3,
+      scannedBy: "door",
+      override: false,
+      clientScanId: "scan-1",
+    });
+
+    expect(second).toEqual(first);
+    expect(repo.scans).toHaveLength(1);
+  });
+
+  it("preserves the client's own override decision in the recorded row", async () => {
+    const repo = new FakeScanRepository();
+    await new RecordSyncedScanUseCase(repo).execute({
+      guestId: 1,
+      direction: "in",
+      method: "qr",
+      seats: 1,
+      scannedBy: "door",
+      override: true,
+      clientScanId: "scan-1",
+    });
+
+    expect(repo.scans[0]).toMatchObject({ override: true });
   });
 });
 
