@@ -1,5 +1,6 @@
 import type { ScanDirection, ScanEvent, ScanMethod } from "../ScanEvent";
 import type { IScanRepository } from "../IScanRepository";
+import { decideScanOutcome } from "../decideScanOutcome";
 
 export type RecordScanUseCaseInput = {
   guestId: number;
@@ -29,34 +30,24 @@ export class RecordScanUseCase {
   async execute(input: RecordScanUseCaseInput): Promise<RecordScanResult> {
     const insideSeats = await this.scanRepository.insideSeatsForGuest(input.guestId);
 
-    if (input.direction === "in") {
-      if (!input.override && insideSeats >= input.partySeats) {
-        return { outcome: "blocked", reason: "already_full", insideSeats };
-      }
-      const seats = input.override ? input.seats : Math.min(input.seats, input.partySeats - insideSeats);
-      const scan = await this.scanRepository.record({
-        guestId: input.guestId,
-        direction: input.direction,
-        method: input.method,
-        scannedBy: input.scannedBy,
-        override: input.override,
-        seats,
-      });
-      return { outcome: "recorded", scan, insideSeats: insideSeats + seats };
-    }
+    const decision = decideScanOutcome({
+      insideSeats,
+      partySeats: input.partySeats,
+      direction: input.direction,
+      seats: input.seats,
+      override: input.override,
+    });
 
-    if (!input.override && insideSeats <= 0) {
-      return { outcome: "blocked", reason: "not_inside", insideSeats };
-    }
-    const seats = input.override ? input.seats : Math.min(input.seats, insideSeats);
+    if (decision.outcome === "blocked") return decision;
+
     const scan = await this.scanRepository.record({
       guestId: input.guestId,
       direction: input.direction,
       method: input.method,
       scannedBy: input.scannedBy,
       override: input.override,
-      seats,
+      seats: decision.seats,
     });
-    return { outcome: "recorded", scan, insideSeats: insideSeats - seats };
+    return { outcome: "recorded", scan, insideSeats: decision.insideSeats };
   }
 }
