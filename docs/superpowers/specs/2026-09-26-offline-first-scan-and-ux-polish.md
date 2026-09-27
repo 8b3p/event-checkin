@@ -1,7 +1,7 @@
 # Offline-First Door & Scanner, Post-Scan UX, and App-Wide Loading States — Design Spec
 
-Date: 2026-09-26
-Status: Draft — pending review before an implementation plan is executed
+Date: 2026-09-26 (decisions resolved 2026-09-27)
+Status: Approved for implementation
 
 ## 1. Summary
 
@@ -363,17 +363,22 @@ inside/invited seat count) — not a modal, never blocks scanning:
 | Staff logs out with items still pending | Queue is not tied to the session cookie's lifetime — it persists in IndexedDB under the event id and keeps trying to sync (as long as a valid session/cookie exists to authenticate the sync call); logging back in as the same event resumes draining it |
 | Owner views the dashboard while door staff has unsynced scans | Dashboard reads server state only (unchanged) — it will lag behind the door device until that device syncs; this is inherent to offline-first and acceptable per the goals in §3 |
 
-### 6.12 Open decision: full PWA / offline page load
+### 6.12 Decided: no service worker / PWA in this pass
 
-Not building this now (§4), flagging here so it's a conscious choice, not
-an oversight: if venues regularly have **zero connectivity at door-open
-time** (not just flaky connectivity mid-event), `/scan` itself needs a
-service worker precaching the app shell so the page can load with no
+Confirmed out of scope (§4) after review. If venues ever regularly have
+**zero connectivity at door-open time** (not just flaky connectivity
+mid-event), or a tab gets killed/reloaded while offline, `/scan` would need
+a service worker precaching the app shell so the page can load with no
 network at all. That's materially more infrastructure (manifest, SW
 lifecycle, cache versioning, interaction with this repo's non-standard
 Next.js build per `AGENTS.md`) than the queue/sync engine above, which
-only needs the page to have loaded successfully at least once. Revisit as
-a separate spec if that turns out to be a real scenario.
+only needs the page to have loaded successfully at least once — and it
+solves a different, narrower problem (a killed/reloaded tab) than the one
+this pass is scoped to (network calls on the scanning critical path). The
+mitigation for now is operational: staff are told not to force-close the
+`/scan` tab while a sync-pending indicator is showing (§6.10). Revisit as
+a separate spec if a killed-tab-while-offline scenario turns out to be
+common in practice.
 
 ---
 
@@ -534,17 +539,18 @@ Specifically: `AddGuestForm`, `EditGuestForm`, `ImportGuestsForm`,
 - **UI**: component test for the new toast/success indicator (§7.2) and
   for `Button`'s `isLoading` state (§8.2).
 
-## 10. Open decisions needing a decision before/while planning
+## 10. Decisions (resolved 2026-09-27)
 
-1. **§6.12** — full offline-capable page load (service worker) is treated
-   as out of scope for this pass. Confirm that's right, or say if
-   zero-connectivity-at-open is a real scenario worth building now.
-2. **§6.8's trade-off** — accepting that two offline devices can both admit
-   the same over-capacity party, recorded honestly rather than silently
-   blocked after the fact. Confirm this is the right call for this
-   product (it matches "better to record the truth than lose an action",
-   but it is a real behavior change from today's always-live guard).
+1. **§6.12** — no service worker / PWA in this pass. Confirmed: data-layer
+   offline-first only; a killed/reloaded tab with zero connectivity is an
+   accepted, documented gap, mitigated operationally (don't force-close
+   the tab while sync is pending), not solved in code.
+2. **§6.8's trade-off** — confirmed: two offline devices can both admit
+   the same over-capacity party; both scans are recorded honestly rather
+   than one being silently blocked after the fact.
 3. **Exact visual treatment** of the toast (§7.2) and the redesigned guest
-   card (§7.3) — this spec pins down requirements, not pixels; fine to
-   leave to implementation-time taste, but flagging in case there's a
-   specific look in mind.
+   card (§7.3) — confirmed: left to implementation-time taste against the
+   requirements this spec lists, no specific look mandated.
+
+All three open decisions from the original draft are resolved — this spec
+is approved for implementation.
