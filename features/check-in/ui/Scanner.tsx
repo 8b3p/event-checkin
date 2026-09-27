@@ -22,11 +22,15 @@ type Overlay =
   | { kind: "pending"; resolved: Resolved; method: ScanMethod }
   /* Remembers the exact direction + seat count that was refused, so the override
      re-submits what staff actually tapped (a partial party can be offered both). */
-  | { kind: "blocked"; resolved: Resolved; method: ScanMethod; direction: ScanDirection; seats: number; blocked: Blocked }
-  | { kind: "recorded"; guestName: string; direction: ScanDirection; seats: number };
+  | { kind: "blocked"; resolved: Resolved; method: ScanMethod; direction: ScanDirection; seats: number; blocked: Blocked };
 
 type View = "camera" | "guests";
 type Recent = { name: string; direction: ScanDirection; seats: number; at: number };
+/** A committed scan's non-blocking success indicator — see spec §7.2. Not
+ * a blocking `Overlay`: the camera is live again the instant this shows. */
+type Toast = { id: string; guestName: string; direction: ScanDirection; seats: number; leaving?: boolean };
+const TOAST_LIFETIME_MS = 1400;
+const MAX_TOASTS = 2;
 
 export default function Scanner({
   event,
@@ -40,6 +44,7 @@ export default function Scanner({
 
   const [view, setView] = useState<View>("camera");
   const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manual, setManual] = useState("");
   const [recent, setRecent] = useState<Recent[]>([]);
@@ -69,6 +74,19 @@ export default function Scanner({
   const dismiss = useCallback(() => {
     setOverlay(null);
     pausedRef.current = false;
+  }, []);
+
+  /* Non-blocking success indicator: auto-clears on its own after
+   * TOAST_LIFETIME_MS, capped at MAX_TOASTS stacked at once so a burst of
+   * fast consecutive scans never piles up indefinitely. */
+  const pushToast = useCallback((toast: Toast) => {
+    setToasts((rows) => [...rows.slice(-(MAX_TOASTS - 1)), toast]);
+    setTimeout(() => {
+      setToasts((rows) => rows.map((row) => (row.id === toast.id ? { ...row, leaving: true } : row)));
+    }, TOAST_LIFETIME_MS - 200);
+    setTimeout(() => {
+      setToasts((rows) => rows.filter((row) => row.id !== toast.id));
+    }, TOAST_LIFETIME_MS);
   }, []);
 
   /* Resolve is now a synchronous local lookup — no network wait on the
@@ -102,7 +120,10 @@ export default function Scanner({
   );
 
   /* Commit runs the seats-aware guard locally and queues the scan for
-   * background sync — no network wait here either. See spec §6.5. */
+   * background sync — no network wait here either. See spec §6.5. A
+   * successful commit returns to the camera immediately (spec §7.2): no
+   * blocking overlay, just a non-blocking toast, so staff can move on to
+   * the next guest right away instead of waiting out a fixed timer. */
   const commit = useCallback(
     (resolved: Resolved, method: ScanMethod, direction: ScanDirection, seats: number, override: boolean) => {
       const result = offline.commit(resolved.guest, direction, method, seats, override);
@@ -113,19 +134,13 @@ export default function Scanner({
         return;
       }
 
-      setOverlay({ kind: "recorded", guestName: resolved.guest.name, direction, seats });
+      dismiss();
+      pushToast({ id: `${resolved.guest.id}-${Date.now()}`, guestName: resolved.guest.name, direction, seats });
       setRecent((rows) => [{ name: resolved.guest.name, direction, seats, at: Date.now() }, ...rows].slice(0, 8));
       signalGood();
     },
-    [offline],
+    [offline, dismiss, pushToast],
   );
-
-  /* A recorded result clears itself so a queue keeps moving; unknown/blocked stay until tapped. */
-  useEffect(() => {
-    if (overlay?.kind !== "recorded") return;
-    const timer = setTimeout(dismiss, 2200);
-    return () => clearTimeout(timer);
-  }, [overlay, dismiss]);
 
   useEffect(() => {
     let scanner: import("html5-qrcode").Html5Qrcode | null = null;
@@ -265,6 +280,14 @@ export default function Scanner({
           <ResultOverlay overlay={overlay} onDismiss={dismiss} onCommit={commit} onSearch={() => showView("guests")} />
         ) : null}
 
+        {/* Non-blocking — sits over the camera without pausing or hiding it,
+            and never intercepts taps on the camera area underneath. */}
+        <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-4">
+          {toasts.map((toast) => (
+            <ScanToast key={toast.id} toast={toast} />
+          ))}
+        </div>
+
         {/* Not gated on `view`: a resolveGuest/commit network failure happens while staff
             are looking at the guest panel, not the camera, so this must be visible on
             either tab. Rendered last so it stacks above the guest panel's opaque
@@ -372,17 +395,6 @@ function ResultOverlay({
     );
   }
 
-  if (overlay.kind === "recorded") {
-    return (
-      <Overlay tone="good" onDismiss={onDismiss}>
-        <p className="display text-5xl">{overlay.guestName}</p>
-        <p className="mt-3 text-2xl font-semibold">
-          {overlay.direction === "in" ? `تم تسجيل دخول ${overlay.seats}` : `تم تسجيل خروج ${overlay.seats}`}
-        </p>
-      </Overlay>
-    );
-  }
-
   // kind === "pending"
   const { resolved } = overlay;
   const { canCheckIn, canCheckOut } = resolved;
@@ -397,7 +409,12 @@ function ResultOverlay({
       <p className="mt-1 text-white/80">
         {statusLabel} — {insideSeats}/{resolved.guest.seats}
       </p>
-      {resolved.guest.note ? <p className="mt-1 text-white/70">{resolved.guest.note}</p> : null}
+      <SeatDots total={resolved.guest.seats} filled={insideSeats} />
+      {resolved.guest.phone || resolved.guest.note ? (
+        <p className="mt-1.5 text-xs text-white/55">
+          {[resolved.guest.phone, resolved.guest.note].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
 
       {canCheckIn ? (
         <DirectionActions
@@ -422,7 +439,24 @@ function ResultOverlay({
   );
 }
 
-/** One direction's primary action plus its "fewer than N" chips. A partially
+/** Visual seat status — filled dots are inside, hollow are outside — so
+ * "3 of 4 arrived, one still outside" reads in under a second (spec §7.3).
+ * Large parties fall back to the numeric fraction alone; a wall of dozens
+ * of dots would be noise, not signal. */
+const MAX_SEAT_DOTS = 12;
+
+function SeatDots({ total, filled }: { total: number; filled: number }) {
+  if (total > MAX_SEAT_DOTS) return null;
+  return (
+    <div className="mt-2 flex justify-center gap-1" aria-hidden>
+      {Array.from({ length: total }, (_, i) => (
+        <span key={i} className={`h-2.5 w-2.5 rounded-full ${i < filled ? "bg-white" : "bg-white/25"}`} />
+      ))}
+    </div>
+  );
+}
+
+/** One direction's primary action plus its "fewer than N" picker. A partially
  * arrived party renders this twice (check in the rest / check out those inside),
  * so `labelFewer` names the direction on the chip row to keep the two apart. */
 function DirectionActions({
@@ -436,8 +470,11 @@ function DirectionActions({
   labelFewer: boolean;
   onCommit: (seats: number) => void;
 }) {
-  const smallerCounts = Array.from({ length: Math.max(defaultSeats - 1, 0) }, (_, i) => i + 1);
+  const fewerCount = Math.max(defaultSeats - 1, 0);
   const fewerLabel = labelFewer ? (direction === "in" ? "دخول عدد أقل؟" : "خروج عدد أقل؟") : "عدد أقل؟";
+  // A long row of one button per seat stops being readable past a handful —
+  // a large party gets a stepper instead (spec §7.3).
+  const useStepper = fewerCount > 5;
 
   return (
     <div className="mt-8 flex w-full max-w-xs flex-col items-center">
@@ -448,22 +485,59 @@ function DirectionActions({
         {direction === "in" ? `تسجيل دخول ${defaultSeats}` : `تسجيل خروج ${defaultSeats}`}
       </button>
 
-      {smallerCounts.length > 0 ? (
+      {fewerCount > 0 ? (
         <div className="mt-4 w-full">
           <p className="mb-2 text-sm text-white/80">{fewerLabel}</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {smallerCounts.map((seats) => (
-              <button
-                key={seats}
-                onClick={() => onCommit(seats)}
-                className="h-12 w-12 rounded-xl border border-white/30 text-lg font-semibold tabular disabled:opacity-50"
-              >
-                {seats}
-              </button>
-            ))}
-          </div>
+          {useStepper ? (
+            <FewerSeatsStepper max={fewerCount} onCommit={onCommit} />
+          ) : (
+            <div className="flex flex-wrap justify-center gap-2">
+              {Array.from({ length: fewerCount }, (_, i) => i + 1).map((seats) => (
+                <button
+                  key={seats}
+                  onClick={() => onCommit(seats)}
+                  className="h-12 w-12 rounded-xl border border-white/30 text-lg font-semibold tabular disabled:opacity-50"
+                >
+                  {seats}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function FewerSeatsStepper({ max, onCommit }: { max: number; onCommit: (seats: number) => void }) {
+  const [seats, setSeats] = useState(max);
+
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <button
+        type="button"
+        onClick={() => setSeats((s) => Math.max(1, s - 1))}
+        aria-label="عدد أقل"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/30 text-2xl font-semibold leading-none"
+      >
+        −
+      </button>
+      <span className="w-10 shrink-0 text-center text-xl font-semibold tabular">{seats}</span>
+      <button
+        type="button"
+        onClick={() => setSeats((s) => Math.min(max, s + 1))}
+        aria-label="عدد أكثر"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/30 text-2xl font-semibold leading-none"
+      >
+        +
+      </button>
+      <button
+        type="button"
+        onClick={() => onCommit(seats)}
+        className="h-11 shrink-0 rounded-xl bg-white/95 px-5 text-sm font-semibold text-ink"
+      >
+        تأكيد
+      </button>
     </div>
   );
 }
@@ -489,5 +563,22 @@ function DismissButton({ onDismiss, children }: { onDismiss: () => void; childre
     <button onClick={onDismiss} className="mt-6 text-sm text-white/70 underline underline-offset-4">
       {children}
     </button>
+  );
+}
+
+/** The non-blocking success indicator (spec §7.2) — scales/fades in, then
+ * fades out on its own; never intercepts taps (the camera stays fully
+ * live and tappable underneath the whole time). */
+function ScanToast({ toast }: { toast: Toast }) {
+  return (
+    <div
+      className={`flash-in flex items-center gap-2 rounded-full bg-night-good px-4 py-2 text-sm font-semibold text-night shadow-lg transition-opacity duration-200 ${toast.leaving ? "opacity-0" : "opacity-100"}`}
+    >
+      <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
+        <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="max-w-[12rem] truncate">{toast.guestName}</span>
+      <span className="tabular text-night/70">{toast.direction === "in" ? `دخول ${toast.seats}` : `خروج ${toast.seats}`}</span>
+    </div>
   );
 }
