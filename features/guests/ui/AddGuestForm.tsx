@@ -38,7 +38,7 @@ export default function AddGuestForm({ eventId, onDone }: { eventId: number; onD
           {ok ? <p className="text-sm text-good-ink">{ok}</p> : null}
 
           <div className="flex gap-2">
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" isLoading={pending}>
               {pending ? "جارٍ الإضافة…" : "إضافة"}
             </Button>
             <Button type="button" variant="ghost" onClick={onDone}>

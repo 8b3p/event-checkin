@@ -23,7 +23,7 @@ export default function LoginForm() {
 
           {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-          <Button type="submit" className="w-full" disabled={pending}>
+          <Button type="submit" className="w-full" isLoading={pending}>
             {pending ? "جارٍ الدخول…" : "دخول"}
           </Button>
         </CardContent>

@@ -60,7 +60,7 @@ export default function CreateEventForm({ suggestedDoorCode }: { suggestedDoorCo
 
           {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" isLoading={pending}>
             {pending ? "جارٍ الإنشاء…" : "إنشاء"}
           </Button>
         </CardContent>

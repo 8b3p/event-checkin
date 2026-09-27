@@ -37,7 +37,7 @@ export default function AddWalkInForm({ onAdded, onDone }: { onAdded: (guest: Wa
           {error ? <ErrorNote>{error}</ErrorNote> : null}
 
           <div className="flex gap-2">
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" isLoading={pending}>
               {pending ? "جارٍ الإضافة…" : "إضافة وتسجيل الدخول"}
             </Button>
             <Button type="button" variant="ghost" onClick={onDone}>

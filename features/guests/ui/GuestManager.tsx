@@ -132,7 +132,8 @@ export default function GuestManager({ event, guests }: { event: Event; guests: 
             type="button"
             variant="link"
             className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-            disabled={downloading || visible.length === 0}
+            disabled={visible.length === 0}
+            isLoading={downloading}
             onClick={download.download}
           >
             {download.state.status === "rendering"

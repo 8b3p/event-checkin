@@ -42,7 +42,7 @@ export default function EditGuestForm({ eventId, guest }: { eventId: number; gue
           {error ? <ErrorNote>{error}</ErrorNote> : null}
           {ok ? <p className="text-sm text-good-ink">{ok}</p> : null}
 
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" isLoading={pending}>
             {pending ? "جارٍ الحفظ…" : "حفظ التغييرات"}
           </Button>
         </form>

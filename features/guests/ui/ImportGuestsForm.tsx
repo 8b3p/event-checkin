@@ -36,7 +36,7 @@ export default function ImportGuestsForm({ eventId, onDone }: { eventId: number;
           {ok ? <p className="text-sm text-good-ink">{ok}</p> : null}
 
           <div className="flex gap-2">
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" isLoading={pending}>
               {pending ? "جارٍ الإضافة…" : "إضافة الجميع"}
             </Button>
             <Button type="button" variant="ghost" onClick={onDone}>

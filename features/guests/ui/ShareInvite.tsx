@@ -106,7 +106,11 @@ export default function ShareInvite({
           >
             تحميل QR
           </a>
-          <Button variant="outline" disabled={cardDownload.state.status === "rendering"} onClick={cardDownload.download}>
+          <Button
+            variant="outline"
+            isLoading={cardDownload.state.status === "rendering"}
+            onClick={cardDownload.download}
+          >
             {cardDownload.state.status === "rendering" ? "جارٍ التحضير…" : "تحميل البطاقة"}
           </Button>
           {guest.phone ? (

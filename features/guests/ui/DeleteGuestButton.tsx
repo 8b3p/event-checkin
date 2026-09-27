@@ -28,7 +28,7 @@ export default function DeleteGuestButton({ eventId, guestId }: { eventId: numbe
       <form action={action} className="flex gap-2">
         <input type="hidden" name="eventId" value={eventId} />
         <input type="hidden" name="id" value={guestId} />
-        <Button type="submit" variant="destructive" className="flex-1" disabled={pending}>
+        <Button type="submit" variant="destructive" className="flex-1" isLoading={pending}>
           {pending ? "جارٍ الحذف…" : "تأكيد الحذف"}
         </Button>
         <Button

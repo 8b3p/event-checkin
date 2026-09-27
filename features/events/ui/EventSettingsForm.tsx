@@ -75,7 +75,7 @@ export default function EventSettingsForm({ event }: { event: Event }) {
           {error ? <ErrorNote>{error}</ErrorNote> : null}
           {ok ? <p className="text-sm text-good-ink">{ok}</p> : null}
 
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" isLoading={pending}>
             {pending ? "جارٍ الحفظ…" : "حفظ"}
           </Button>
         </form>

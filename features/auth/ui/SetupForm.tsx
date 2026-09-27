@@ -24,7 +24,7 @@ export default function SetupForm() {
 
           {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-          <Button type="submit" className="w-full" disabled={pending}>
+          <Button type="submit" className="w-full" isLoading={pending}>
             {pending ? "جارٍ الإنشاء…" : "إنشاء الحساب"}
           </Button>
         </CardContent>

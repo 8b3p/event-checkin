@@ -2,6 +2,7 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import { Slot } from "radix-ui"
+import { Spinner } from "./spinner"
 
 const buttonVariants = cva(
   "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -37,26 +38,65 @@ const buttonVariants = cva(
   }
 )
 
+const SPINNER_SIZE_BY_BUTTON_SIZE: Record<NonNullable<VariantProps<typeof buttonVariants>["size"]>, "xs" | "sm" | "default" | "lg"> = {
+  default: "sm",
+  xs: "xs",
+  sm: "xs",
+  lg: "default",
+  icon: "sm",
+  "icon-xs": "xs",
+  "icon-sm": "xs",
+  "icon-lg": "sm",
+}
+
 function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
+  isLoading = false,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    /** Shows the shared spinner and disables the button — one place this
+     * logic lives instead of every form hand-rolling its own pending state. */
+    isLoading?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
+
+  // Radix's Slot clones onto a single child, so asChild callers (e.g. a
+  // Link-as-button) keep their own children untouched — isLoading only
+  // makes sense for a real <button>.
+  if (asChild) {
+    return (
+      <Comp
+        data-slot="button"
+        data-variant={variant}
+        data-size={size}
+        className={cn(buttonVariants({ variant, size, className }))}
+        {...props}
+      >
+        {children}
+      </Comp>
+    )
+  }
 
   return (
     <Comp
       data-slot="button"
       data-variant={variant}
       data-size={size}
+      aria-busy={isLoading || undefined}
+      disabled={disabled || isLoading}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {isLoading ? <Spinner size={SPINNER_SIZE_BY_BUTTON_SIZE[size ?? "default"]} /> : null}
+      {children}
+    </Comp>
   )
 }
 
