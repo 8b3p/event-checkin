@@ -46,9 +46,14 @@ arrival → two-way in/out with a full log).
   per-business signup/billing/isolation.
 - **No guest accounts.** An invitation link/code is the guest's credential,
   same trust model as a paper ticket, same as today.
-- **No offline scanning.** The door needs connectivity. This is where
-  double-entry bugs live; today's app made this call deliberately and nothing
-  about multi-event changes that reasoning.
+- ~~**No offline scanning.**~~ **Superseded 2026-09-26** by
+  `docs/superpowers/specs/2026-09-26-offline-first-scan-and-ux-polish.md`.
+  This non-goal held because offline scanning is where double-entry bugs
+  live; the superseding spec's §6.8 is the direct answer to that risk
+  (client-generated idempotency keys, and queued scans are never
+  re-validated against newer server state once staff has acted on them).
+  Kept here, struck through, so the reasoning for the original call stays
+  visible rather than silently disappearing.
 - **No payments or ticketing.** Still an RSVP/attendance tool, not a
   box-office.
 - **No automated guest messaging** (SMS/email/WhatsApp API sending).
