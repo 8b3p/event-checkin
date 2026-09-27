@@ -59,9 +59,13 @@ class FakeScanRepository implements IScanRepository {
   private nextId = 1;
 
   async record(input: RecordScanInput): Promise<ScanEvent> {
-    const scan: ScanEvent = { id: this.nextId++, at: new Date(), ...input };
+    const scan: ScanEvent = { id: this.nextId++, at: new Date(), ...input, clientScanId: input.clientScanId ?? null };
     this.scans.push(scan);
     return scan;
+  }
+
+  async findByClientScanId(clientScanId: string): Promise<ScanEvent | null> {
+    return this.scans.find((s) => s.clientScanId === clientScanId) ?? null;
   }
 
   async listForGuest(guestId: number): Promise<ScanEvent[]> {

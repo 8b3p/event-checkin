@@ -66,6 +66,10 @@ export const scanEvents = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
     scannedBy: text("scanned_by").notNull(),
     override: boolean("override").notNull().default(false),
+    /** Client-generated idempotency key for a scan queued while offline —
+     * see docs/superpowers/specs/2026-09-26-offline-first-scan-and-ux-polish.md §6.7.
+     * Null for a scan recorded through the ordinary live/online path. */
+    clientScanId: text("client_scan_id").unique(),
   },
   (table) => [
     index("idx_scan_events_guest").on(table.guestId),

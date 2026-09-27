@@ -22,6 +22,7 @@ function toScanEvent(row: typeof scanEvents.$inferSelect): ScanEvent {
     at: row.at,
     scannedBy: row.scannedBy,
     override: row.override,
+    clientScanId: row.clientScanId,
   };
 }
 
@@ -29,6 +30,11 @@ export class ScanRepository implements IScanRepository {
   async record(input: RecordScanInput): Promise<ScanEvent> {
     const rows = await getDb().insert(scanEvents).values(input).returning();
     return toScanEvent(rows[0]);
+  }
+
+  async findByClientScanId(clientScanId: string): Promise<ScanEvent | null> {
+    const rows = await getDb().select().from(scanEvents).where(eq(scanEvents.clientScanId, clientScanId)).limit(1);
+    return rows[0] ? toScanEvent(rows[0]) : null;
   }
 
   async listForGuest(guestId: number): Promise<ScanEvent[]> {

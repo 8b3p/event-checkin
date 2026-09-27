@@ -10,6 +10,8 @@ export type ScanEvent = {
   at: Date;
   scannedBy: string;
   override: boolean;
+  /** Idempotency key for a scan queued while offline; null for one recorded live. */
+  clientScanId: string | null;
 };
 
 export type RecordScanInput = {
@@ -19,6 +21,7 @@ export type RecordScanInput = {
   seats: number;
   scannedBy: string;
   override: boolean;
+  clientScanId?: string | null;
 };
 
 export type GuestWithStatus = {

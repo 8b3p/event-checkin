@@ -132,6 +132,65 @@ describe("ScanRepository (integration)", () => {
     expect(recentB[0].guestName).toBe("Omar Khan");
   });
 
+  it("looks up a scan by its client-generated idempotency key", async () => {
+    const event = await new EventRepository().create(EVENT);
+    const guest = await seedGuest(event.id);
+    const repo = new ScanRepository();
+
+    expect(await repo.findByClientScanId("scan-abc")).toBeNull();
+
+    const scan = await repo.record({
+      guestId: guest.id,
+      direction: "in",
+      method: "qr",
+      seats: 2,
+      scannedBy: "door",
+      override: false,
+      clientScanId: "scan-abc",
+    });
+
+    expect(await repo.findByClientScanId("scan-abc")).toEqual(scan);
+  });
+
+  it("rejects a second scan reusing the same client-generated idempotency key", async () => {
+    const event = await new EventRepository().create(EVENT);
+    const guest = await seedGuest(event.id);
+    const repo = new ScanRepository();
+
+    await repo.record({
+      guestId: guest.id,
+      direction: "in",
+      method: "qr",
+      seats: 2,
+      scannedBy: "door",
+      override: false,
+      clientScanId: "scan-abc",
+    });
+
+    await expect(
+      repo.record({
+        guestId: guest.id,
+        direction: "in",
+        method: "qr",
+        seats: 2,
+        scannedBy: "door",
+        override: false,
+        clientScanId: "scan-abc",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("allows any number of scans with no client-generated idempotency key", async () => {
+    const event = await new EventRepository().create(EVENT);
+    const guest = await seedGuest(event.id);
+    const repo = new ScanRepository();
+
+    await repo.record({ guestId: guest.id, direction: "in", method: "qr", seats: 1, scannedBy: "door", override: false });
+    await repo.record({ guestId: guest.id, direction: "in", method: "qr", seats: 1, scannedBy: "door", override: false });
+
+    expect(await repo.listForGuest(guest.id)).toHaveLength(2);
+  });
+
   it("scopes arrival buckets to event and filters by direction (in only)", async () => {
     const eventRepo = new EventRepository();
     const eventA = await eventRepo.create(EVENT);
