@@ -23,6 +23,7 @@ function queuedScan(overrides: Partial<QueuedScan> = {}): QueuedScan {
     direction: "in",
     method: "qr",
     seats: 1,
+    override: false,
     createdAt: 0,
     status: "pending",
     attempts: 0,
@@ -110,6 +111,7 @@ describe("commitScanLocally", () => {
         direction: "in",
         method: "qr",
         seats: 4,
+        override: false,
         createdAt: 1234,
         status: "pending",
         attempts: 0,
@@ -127,8 +129,8 @@ describe("commitScanLocally", () => {
     expect(result).toEqual({ status: "blocked", reason: "already_full", insideSeats: 2 });
   });
 
-  it("records unconditionally when overridden", () => {
+  it("records unconditionally when overridden, and carries the override flag onto the queued scan", () => {
     const result = commitScanLocally(guest({ seats: 2, insideSeats: 2 }), "in", "qr", 2, true, makeId, now);
-    expect(result).toMatchObject({ status: "recorded", insideSeats: 4, queuedScan: { seats: 2 } });
+    expect(result).toMatchObject({ status: "recorded", insideSeats: 4, queuedScan: { seats: 2, override: true } });
   });
 });

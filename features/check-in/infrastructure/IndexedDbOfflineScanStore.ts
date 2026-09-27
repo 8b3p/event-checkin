@@ -1,6 +1,6 @@
 import type { EventStats, GuestWithStatus } from "../domain/ScanEvent";
 import type { QueuedScan } from "../domain/offlineQueue";
-import type { IOfflineScanStore, OfflineMeta } from "./IOfflineScanStore";
+import type { IOfflineScanStore, OfflineMeta } from "../domain/IOfflineScanStore";
 
 /**
  * IndexedDB-backed offline cache, one database per event

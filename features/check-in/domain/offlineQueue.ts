@@ -13,6 +13,10 @@ export type QueuedScan = {
   direction: ScanDirection;
   method: ScanMethod;
   seats: number;
+  /** Staff's own override decision at the moment this was committed
+   * locally — carried through to the sync request as-is, since the sync
+   * endpoint never re-derives it (spec §6.8). */
+  override: boolean;
   createdAt: number;
   status: QueuedScanStatus;
   attempts: number;
@@ -103,6 +107,7 @@ export function commitScanLocally(
     direction,
     method,
     seats: decision.seats,
+    override,
     createdAt: now(),
     status: "pending",
     attempts: 0,
