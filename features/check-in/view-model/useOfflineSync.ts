@@ -6,6 +6,7 @@ import { nextBackoffDelayMs } from "@/features/check-in/domain/backoffDelay";
 import {
   applyPendingScans,
   commitScanLocally,
+  findGuestByScannedCode,
   resolveGuestStatus,
   type LocalCommitResult,
   type LocalResolveResult,
@@ -185,7 +186,7 @@ export function useOfflineSync(eventId: number, initialGuests: GuestWithStatus[]
 
   const resolveByCode = useCallback(
     (code: string): LocalResolveResult => {
-      const guest = guests.find((g) => g.code === code) ?? null;
+      const guest = findGuestByScannedCode(guests, code);
       return resolveGuestStatus(guest);
     },
     [guests],

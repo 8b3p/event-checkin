@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPendingScans, commitScanLocally, resolveGuestStatus, type QueuedScan } from "./offlineQueue";
+import { applyPendingScans, commitScanLocally, findGuestByScannedCode, resolveGuestStatus, type QueuedScan } from "./offlineQueue";
 import type { GuestWithStatus } from "./ScanEvent";
 
 function guest(overrides: Partial<GuestWithStatus> = {}): GuestWithStatus {
@@ -93,6 +93,33 @@ describe("resolveGuestStatus", () => {
   it("offers both when a party is partially arrived", () => {
     const result = resolveGuestStatus(guest({ seats: 4, insideSeats: 2 }));
     expect(result).toMatchObject({ canCheckIn: { defaultSeats: 2 }, canCheckOut: { defaultSeats: 2 } });
+  });
+});
+
+describe("findGuestByScannedCode", () => {
+  it("finds a guest when scanning the bare stored code", () => {
+    const guests = [guest({ code: "AB23CD45FG" })];
+    expect(findGuestByScannedCode(guests, "AB23CD45FG")).toBe(guests[0]);
+  });
+
+  it("finds a guest when scanning the full invite URL a real QR encodes", () => {
+    const guests = [guest({ code: "AB23CD45FG" })];
+    expect(findGuestByScannedCode(guests, "https://example.com/i/AB23CD45FG")).toBe(guests[0]);
+  });
+
+  it("finds a guest when the scanned code is lowercase", () => {
+    const guests = [guest({ code: "AB23CD45FG" })];
+    expect(findGuestByScannedCode(guests, "ab23cd45fg")).toBe(guests[0]);
+  });
+
+  it("returns null for a code that doesn't match any guest", () => {
+    const guests = [guest({ code: "AB23CD45FG" })];
+    expect(findGuestByScannedCode(guests, "ZZ99ZZ99ZZ")).toBeNull();
+  });
+
+  it("returns null for garbage that isn't invite-shaped", () => {
+    const guests = [guest({ code: "AB23CD45FG" })];
+    expect(findGuestByScannedCode(guests, "not a code")).toBeNull();
   });
 });
 

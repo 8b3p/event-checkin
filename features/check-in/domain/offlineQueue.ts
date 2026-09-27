@@ -1,5 +1,6 @@
 import { decideScanOutcome } from "./decideScanOutcome";
 import type { GuestWithStatus, ScanDirection, ScanMethod } from "./ScanEvent";
+import { normaliseScan } from "@/shared/lib/code-format";
 
 export type QueuedScanStatus = "pending" | "syncing" | "synced" | "failed";
 
@@ -49,6 +50,17 @@ export function applyPendingScans(guests: GuestWithStatus[], queue: QueuedScan[]
     );
     return { ...guest, insideSeats };
   });
+}
+
+/** Finds the guest a scanned/typed code refers to. A real QR encodes the
+ * guest's full invite URL, not the bare code (see `inviteUrl`), and manual
+ * entry may come in lowercase — `normaliseScan` reduces either to the
+ * stored form before matching, mirroring the pre-offline server-side
+ * lookup in `POST /api/checkin`. */
+export function findGuestByScannedCode(guests: GuestWithStatus[], rawCode: string): GuestWithStatus | null {
+  const code = normaliseScan(rawCode);
+  if (!code) return null;
+  return guests.find((g) => g.code === code) ?? null;
 }
 
 export type LocalResolveResult =
