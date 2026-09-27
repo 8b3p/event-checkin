@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, ilike } from "drizzle-orm";
 import { getDb } from "@/shared/infrastructure/db/client";
 import { guests, scanEvents } from "@/shared/infrastructure/db/schema";
+import { computeStatsFromGuests } from "../domain/computeStatsFromGuests";
 import { foldGuestBalances } from "../domain/foldGuestBalances";
 import type {
   ArrivalBucket,
@@ -104,13 +105,7 @@ export class ScanRepository implements IScanRepository {
 
   async eventStats(eventId: number): Promise<EventStats> {
     const guestsWithStatus = await this.listGuestsWithStatus(eventId);
-
-    return {
-      invites: guestsWithStatus.length,
-      seatsInvited: guestsWithStatus.reduce((sum, g) => sum + g.seats, 0),
-      guestsInside: guestsWithStatus.filter((g) => g.insideSeats > 0).length,
-      seatsInside: guestsWithStatus.reduce((sum, g) => sum + Math.max(g.insideSeats, 0), 0),
-    };
+    return computeStatsFromGuests(guestsWithStatus);
   }
 
   /** Check-ins only (direction = 'in'), in 15-minute buckets, for the arrivals chart. */
