@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { GetEventStatsUseCase } from "@/features/check-in/domain/use-cases/GetEventStatsUseCase";
 import { ListGuestsWithStatusUseCase } from "@/features/check-in/domain/use-cases/ListGuestsWithStatusUseCase";
 import { makeScanRepository } from "@/features/check-in/infrastructure/factory";
 import Scanner from "@/features/check-in/ui/Scanner";
@@ -15,11 +14,9 @@ export default async function ScanPage() {
   const event = await new GetEventUseCase(makeEventRepository()).execute(eventId);
   if (!event) notFound();
 
-  const scanRepository = makeScanRepository();
-  const [stats, guests] = await Promise.all([
-    new GetEventStatsUseCase(scanRepository).execute(eventId),
-    new ListGuestsWithStatusUseCase(scanRepository).execute(eventId),
-  ]);
+  // Stats are derived client-side from this same guest list (computeStatsFromGuests) —
+  // see useOfflineSync — so a separate stats read here would just be redundant.
+  const guests = await new ListGuestsWithStatusUseCase(makeScanRepository()).execute(eventId);
 
-  return <Scanner event={event} initialStats={stats} initialGuests={guests} />;
+  return <Scanner event={event} initialGuests={guests} />;
 }

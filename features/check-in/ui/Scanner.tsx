@@ -3,9 +3,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommitResult, ResolveResult } from "@/app/api/checkin/route";
 import type { Event } from "@/features/events/domain/Event";
-import type { EventStats, GuestWithStatus, ScanDirection, ScanMethod } from "@/features/check-in/domain/ScanEvent";
+import type { GuestWithStatus, ScanDirection, ScanMethod } from "@/features/check-in/domain/ScanEvent";
+import type { LocalCommitResult, LocalResolveResult } from "@/features/check-in/domain/offlineQueue";
+import { useOfflineSync } from "@/features/check-in/view-model/useOfflineSync";
 import { normaliseScan } from "@/shared/lib/code-format";
 import { logoutAction } from "@/shared/lib/logout-action";
 import { signalBad, signalGood, signalStop } from "./feedback";
@@ -14,8 +15,8 @@ import GuestSearchPanel from "./GuestSearchPanel";
 const SCANNER_ID = "wc-reader";
 const REPEAT_WINDOW_MS = 4000;
 
-type Resolved = Extract<ResolveResult, { status: "resolved" }>;
-type Blocked = Extract<CommitResult, { status: "blocked" }>;
+type Resolved = Extract<LocalResolveResult, { status: "resolved" }>;
+type Blocked = Extract<LocalCommitResult, { status: "blocked" }>;
 type Overlay =
   | { kind: "unknown" }
   | { kind: "pending"; resolved: Resolved; method: ScanMethod }
@@ -29,20 +30,18 @@ type Recent = { name: string; direction: ScanDirection; seats: number; at: numbe
 
 export default function Scanner({
   event,
-  initialStats,
   initialGuests,
 }: {
   event: Event;
-  initialStats: EventStats;
   initialGuests: GuestWithStatus[];
 }) {
+  const offline = useOfflineSync(event.id, initialGuests);
+  const { guests, stats } = offline;
+
   const [view, setView] = useState<View>("camera");
-  const [stats, setStats] = useState(initialStats);
-  const [guests, setGuests] = useState(initialGuests);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manual, setManual] = useState("");
-  const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
 
   // Kept in a ref so the html5-qrcode frame callback always sees the current value
@@ -55,13 +54,16 @@ export default function Scanner({
   const viewRef = useRef<View>("camera");
   const lastScanRef = useRef<{ code: string; at: number } | null>(null);
 
+  // The camera-setup effect below must only ever run once per mount — it
+  // must not restart the camera just because `resolveByCode`'s identity
+  // changes (which happens whenever `guests` updates, i.e. after every
+  // scan). Route the frame callback through a ref that's always kept
+  // current instead of depending on the callback directly.
+  const resolveByCodeRef = useRef<(code: string) => void>(() => {});
+
   const showView = useCallback((next: View) => {
     viewRef.current = next;
     setView(next);
-  }, []);
-
-  const applyGuestInsideSeats = useCallback((guestId: number, insideSeats: number) => {
-    setGuests((rows) => rows.map((g) => (g.id === guestId ? { ...g, insideSeats } : g)));
   }, []);
 
   const dismiss = useCallback(() => {
@@ -69,102 +71,53 @@ export default function Scanner({
     pausedRef.current = false;
   }, []);
 
-  const resolveByCode = useCallback(async (code: string) => {
-    pausedRef.current = true;
-    setBusy(true);
-    try {
-      const response = await fetch("/api/checkin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      if (response.status === 401) {
-        window.location.href = "/door";
-        return;
-      }
-      const data = (await response.json()) as ResolveResult;
-
-      if (data.status !== "resolved") {
+  /* Resolve is now a synchronous local lookup — no network wait on the
+   * scanning critical path. See spec §6.4. */
+  const resolveByCode = useCallback(
+    (code: string) => {
+      const result = offline.resolveByCode(code);
+      if (result.status !== "resolved") {
         setOverlay({ kind: "unknown" });
         signalBad();
         return;
       }
-      setOverlay({ kind: "pending", resolved: data, method: "qr" });
-    } catch {
-      // No overlay will open, so nothing would ever dismiss() — resume scanning here.
-      pausedRef.current = false;
-      setCameraError("تعذّر الاتصال. تحقّق من الشبكة وحاول مرة أخرى.");
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+      setOverlay({ kind: "pending", resolved: result, method: "qr" });
+    },
+    [offline],
+  );
+
+  useEffect(() => {
+    resolveByCodeRef.current = resolveByCode;
+  }, [resolveByCode]);
 
   /** Used by GuestSearchPanel: the guest is already known, just resolve their current status. */
-  const resolveGuest = useCallback(async (guestId: number) => {
-    pausedRef.current = true;
-    setBusy(true);
-    try {
-      const response = await fetch("/api/checkin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guestId }),
-      });
-      if (response.status === 401) {
-        window.location.href = "/door";
-        return;
-      }
-      const data = (await response.json()) as ResolveResult;
-      if (data.status === "resolved") {
-        setOverlay({ kind: "pending", resolved: data, method: "manual" });
-      } else {
-        pausedRef.current = false; // no overlay opened, nothing to dismiss
-      }
-    } catch {
-      pausedRef.current = false; // no overlay opened, nothing to dismiss
-      setCameraError("تعذّر الاتصال. تحقّق من الشبكة وحاول مرة أخرى.");
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  const commit = useCallback(
-    async (resolved: Resolved, method: ScanMethod, direction: ScanDirection, seats: number, override: boolean) => {
-      setBusy(true);
-      try {
-        const response = await fetch("/api/checkin", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ guestId: resolved.guest.id, direction, seats, override, method }),
-        });
-        if (response.status === 401) {
-          window.location.href = "/door";
-          return;
-        }
-        const data = (await response.json()) as CommitResult;
-
-        if (data.status === "blocked") {
-          setOverlay({ kind: "blocked", resolved, method, direction, seats, blocked: data });
-          signalStop();
-          return;
-        }
-        if (data.status !== "recorded") {
-          setOverlay({ kind: "unknown" });
-          signalBad();
-          return;
-        }
-
-        applyGuestInsideSeats(resolved.guest.id, data.insideSeats);
-        setStats(data.stats);
-        setOverlay({ kind: "recorded", guestName: resolved.guest.name, direction, seats });
-        setRecent((rows) => [{ name: resolved.guest.name, direction, seats, at: Date.now() }, ...rows].slice(0, 8));
-        signalGood();
-      } catch {
-        setCameraError("تعذّر الاتصال. تحقّق من الشبكة وحاول مرة أخرى.");
-      } finally {
-        setBusy(false);
+  const resolveGuest = useCallback(
+    (guestId: number) => {
+      const result = offline.resolveGuest(guestId);
+      if (result.status === "resolved") {
+        setOverlay({ kind: "pending", resolved: result, method: "manual" });
       }
     },
-    [applyGuestInsideSeats],
+    [offline],
+  );
+
+  /* Commit runs the seats-aware guard locally and queues the scan for
+   * background sync — no network wait here either. See spec §6.5. */
+  const commit = useCallback(
+    (resolved: Resolved, method: ScanMethod, direction: ScanDirection, seats: number, override: boolean) => {
+      const result = offline.commit(resolved.guest, direction, method, seats, override);
+
+      if (result.status === "blocked") {
+        setOverlay({ kind: "blocked", resolved, method, direction, seats, blocked: result });
+        signalStop();
+        return;
+      }
+
+      setOverlay({ kind: "recorded", guestName: resolved.guest.name, direction, seats });
+      setRecent((rows) => [{ name: resolved.guest.name, direction, seats, at: Date.now() }, ...rows].slice(0, 8));
+      signalGood();
+    },
+    [offline],
   );
 
   /* A recorded result clears itself so a queue keeps moving; unknown/blocked stay until tapped. */
@@ -201,10 +154,13 @@ export default function Scanner({
             if (previous && previous.code === decoded && now - previous.at < REPEAT_WINDOW_MS) return;
 
             lastScanRef.current = { code: decoded, at: now };
-            // Pause synchronously, before any await, so the next frame's decode
-            // (even of a different code) is dropped while this one resolves.
+            // Pause synchronously so the next frame's decode (even of a
+            // different code) is dropped while this one's overlay is open —
+            // resolveByCodeRef is used instead of a direct dependency so
+            // this effect (and the camera it starts) never has to restart
+            // just because resolveByCode's identity changes.
             pausedRef.current = true;
-            void resolveByCode(decoded);
+            resolveByCodeRef.current(decoded);
           },
           () => {
             // Fires every frame without a code found. Nothing to do.
@@ -233,7 +189,10 @@ export default function Scanner({
         .then(() => scanner?.clear())
         .catch(() => undefined);
     };
-  }, [resolveByCode]);
+    // Intentionally empty — the camera starts exactly once per mount; see
+    // resolveByCodeRef above for why this doesn't need resolveByCode itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex min-h-dvh flex-col bg-night text-night-ink" dir="rtl">
@@ -250,6 +209,20 @@ export default function Scanner({
           <p className="text-xs text-night-muted">بالداخل الآن</p>
         </div>
       </header>
+
+      {offline.syncStatus.kind !== "synced" ? (
+        <div className="border-b border-night-line px-5 py-1.5 text-xs">
+          {offline.syncStatus.kind === "pending" ? (
+            <span className="text-night-muted">{offline.syncStatus.count} بانتظار المزامنة…</span>
+          ) : offline.syncStatus.kind === "offline" ? (
+            <span className="text-night-muted">
+              غير متصل — سيُزامَن لاحقاً{offline.syncStatus.count > 0 ? ` (${offline.syncStatus.count})` : ""}
+            </span>
+          ) : (
+            <span className="text-night-bad">يلزم تسجيل الدخول مجدداً لإتمام المزامنة ({offline.syncStatus.count})</span>
+          )}
+        </div>
+      ) : null}
 
       <div className="flex gap-2 border-b border-night-line px-5 py-2">
         <button
@@ -279,7 +252,7 @@ export default function Scanner({
 
         {view === "guests" ? (
           <div className="absolute inset-0 overflow-y-auto bg-canvas p-4 text-ink">
-            <GuestSearchPanel guests={guests} onResolve={resolveGuest} onGuestAdded={(guest) => setGuests((rows) => [guest, ...rows])} />
+            <GuestSearchPanel guests={guests} onResolve={resolveGuest} onGuestAdded={offline.addGuestToCache} />
           </div>
         ) : null}
 
@@ -289,7 +262,7 @@ export default function Scanner({
             guests-panel block above so it stacks on top of that panel's opaque
             bg-canvas layer instead of being hidden behind it. */}
         {overlay ? (
-          <ResultOverlay overlay={overlay} busy={busy} onDismiss={dismiss} onCommit={commit} onSearch={() => showView("guests")} />
+          <ResultOverlay overlay={overlay} onDismiss={dismiss} onCommit={commit} onSearch={() => showView("guests")} />
         ) : null}
 
         {/* Not gated on `view`: a resolveGuest/commit network failure happens while staff
@@ -309,7 +282,7 @@ export default function Scanner({
             onSubmit={(event) => {
               event.preventDefault();
               if (!manual.trim()) return;
-              void resolveByCode(manual.trim());
+              resolveByCode(manual.trim());
               setManual("");
             }}
             className="flex gap-2"
@@ -325,7 +298,6 @@ export default function Scanner({
             />
             <button
               type="submit"
-              disabled={busy}
               className="h-12 rounded-xl bg-night-good px-5 text-sm font-semibold text-night disabled:opacity-50"
             >
               تحقّق
@@ -357,13 +329,11 @@ export default function Scanner({
 
 function ResultOverlay({
   overlay,
-  busy,
   onDismiss,
   onCommit,
   onSearch,
 }: {
   overlay: Overlay;
-  busy: boolean;
   onDismiss: () => void;
   onCommit: (resolved: Resolved, method: ScanMethod, direction: ScanDirection, seats: number, override: boolean) => void;
   onSearch: () => void;
@@ -390,7 +360,6 @@ function ResultOverlay({
         <div className="mt-8 flex w-full max-w-xs flex-col gap-2">
           <button
             onClick={() => onCommit(overlay.resolved, overlay.method, overlay.direction, overlay.seats, true)}
-            disabled={busy}
             className="h-14 rounded-xl bg-white/95 text-base font-semibold text-ink disabled:opacity-50"
           >
             تجاوز والتسجيل على أي حال
@@ -418,14 +387,15 @@ function ResultOverlay({
   const { resolved } = overlay;
   const { canCheckIn, canCheckOut } = resolved;
   const both = canCheckIn !== null && canCheckOut !== null;
+  const insideSeats = resolved.guest.insideSeats;
   const statusLabel =
-    resolved.insideSeats <= 0 ? "بالخارج الآن" : resolved.insideSeats >= resolved.guest.seats ? "بالداخل الآن" : "بالداخل جزئياً";
+    insideSeats <= 0 ? "بالخارج الآن" : insideSeats >= resolved.guest.seats ? "بالداخل الآن" : "بالداخل جزئياً";
 
   return (
     <Overlay tone="good" onDismiss={onDismiss}>
       <p className="display text-5xl">{resolved.guest.name}</p>
       <p className="mt-1 text-white/80">
-        {statusLabel} — {resolved.insideSeats}/{resolved.guest.seats}
+        {statusLabel} — {insideSeats}/{resolved.guest.seats}
       </p>
       {resolved.guest.note ? <p className="mt-1 text-white/70">{resolved.guest.note}</p> : null}
 
@@ -434,7 +404,6 @@ function ResultOverlay({
           direction="in"
           defaultSeats={canCheckIn.defaultSeats}
           labelFewer={both}
-          busy={busy}
           onCommit={(seats) => onCommit(resolved, overlay.method, "in", seats, false)}
         />
       ) : null}
@@ -444,7 +413,6 @@ function ResultOverlay({
           direction="out"
           defaultSeats={canCheckOut.defaultSeats}
           labelFewer={both}
-          busy={busy}
           onCommit={(seats) => onCommit(resolved, overlay.method, "out", seats, false)}
         />
       ) : null}
@@ -461,13 +429,11 @@ function DirectionActions({
   direction,
   defaultSeats,
   labelFewer,
-  busy,
   onCommit,
 }: {
   direction: ScanDirection;
   defaultSeats: number;
   labelFewer: boolean;
-  busy: boolean;
   onCommit: (seats: number) => void;
 }) {
   const smallerCounts = Array.from({ length: Math.max(defaultSeats - 1, 0) }, (_, i) => i + 1);
@@ -477,7 +443,6 @@ function DirectionActions({
     <div className="mt-8 flex w-full max-w-xs flex-col items-center">
       <button
         onClick={() => onCommit(defaultSeats)}
-        disabled={busy}
         className="h-14 w-full rounded-xl bg-white/95 text-lg font-semibold text-ink disabled:opacity-50"
       >
         {direction === "in" ? `تسجيل دخول ${defaultSeats}` : `تسجيل خروج ${defaultSeats}`}
@@ -491,7 +456,6 @@ function DirectionActions({
               <button
                 key={seats}
                 onClick={() => onCommit(seats)}
-                disabled={busy}
                 className="h-12 w-12 rounded-xl border border-white/30 text-lg font-semibold tabular disabled:opacity-50"
               >
                 {seats}
