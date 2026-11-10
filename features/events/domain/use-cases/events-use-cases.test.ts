@@ -6,6 +6,7 @@ import { CreateEventUseCase } from "./CreateEventUseCase";
 import { DuplicateEventUseCase } from "./DuplicateEventUseCase";
 import { GetEventUseCase } from "./GetEventUseCase";
 import { ListEventsUseCase } from "./ListEventsUseCase";
+import { RestoreEventUseCase } from "./RestoreEventUseCase";
 import { UpdateEventUseCase } from "./UpdateEventUseCase";
 
 class FakeEventRepository implements IEventRepository {
@@ -38,6 +39,11 @@ class FakeEventRepository implements IEventRepository {
   async archive(id: number): Promise<void> {
     const row = this.rows.find((r) => r.id === id);
     if (row) row.status = "archived";
+  }
+
+  async restore(id: number): Promise<void> {
+    const row = this.rows.find((r) => r.id === id);
+    if (row) row.status = "live";
   }
 }
 
@@ -93,6 +99,14 @@ describe("event use-cases", () => {
     const created = await repo.create(BASE);
     await new ArchiveEventUseCase(repo).execute(created.id);
     expect((await repo.getById(created.id))?.status).toBe("archived");
+  });
+
+  it("restores an archived event back to live", async () => {
+    const repo = new FakeEventRepository();
+    const created = await repo.create(BASE);
+    await new ArchiveEventUseCase(repo).execute(created.id);
+    await new RestoreEventUseCase(repo).execute(created.id);
+    expect((await repo.getById(created.id))?.status).toBe("live");
   });
 
   it("duplicates an event's settings with a new door code and no date", async () => {

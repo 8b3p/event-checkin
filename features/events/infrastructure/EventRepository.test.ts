@@ -39,4 +39,16 @@ describe("EventRepository (integration)", () => {
     await repo.archive(first.id);
     expect((await repo.getById(first.id))?.status).toBe("archived");
   });
+
+  it("restores an archived event to live without touching others", async () => {
+    const repo = new EventRepository();
+    const first = await repo.create(BASE);
+    const second = await repo.create({ ...BASE, doorCode: "PALM2" });
+    await repo.archive(first.id);
+    await repo.archive(second.id);
+
+    await repo.restore(first.id);
+    expect((await repo.getById(first.id))?.status).toBe("live");
+    expect((await repo.getById(second.id))?.status).toBe("archived");
+  });
 });

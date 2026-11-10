@@ -10,11 +10,14 @@ export type DoorAuthState = { error?: string };
 export async function doorLoginAction(_prev: DoorAuthState, formData: FormData): Promise<DoorAuthState> {
   const code = String(formData.get("doorCode") ?? "");
 
-  const session = await new AuthenticateDoorUseCase(makeEventRepository()).execute(code);
-  if (!session) {
+  const result = await new AuthenticateDoorUseCase(makeEventRepository()).execute(code);
+  if (result.outcome === "archived") {
+    return { error: "انتهت هذه الفعالية وتمت أرشفتها، لذلك تم إغلاق الباب." };
+  }
+  if (result.outcome === "invalid_code") {
     return { error: "رمز الباب غير صحيح." };
   }
 
-  await setSessionCookie(session);
+  await setSessionCookie(result.session);
   redirect("/scan");
 }

@@ -10,6 +10,7 @@ import { RecordSyncedScanUseCase } from "@/features/check-in/domain/use-cases/Re
 import { makeScanRepository } from "@/features/check-in/infrastructure/factory";
 import type { EventStats, GuestWithStatus, ScanDirection, ScanMethod } from "@/features/check-in/domain/ScanEvent";
 import { normaliseScan } from "@/shared/lib/codes";
+import { isEventOpenForDoor } from "@/shared/lib/guard";
 import { getSession } from "@/shared/lib/session-cookie";
 import type { Session } from "@/features/auth/domain/Session";
 
@@ -45,6 +46,14 @@ export type SnapshotResult =
  * fetch instead of surfacing as "you're logged out". Return 401 JSON instead;
  * the client checks for it and sends the page itself to /door. */
 async function requireDoorSession(): Promise<Extract<Session, { role: "door" }> | null> {
+  const session = await getSession();
+  if (session?.role !== "door") return null;
+  return (await isEventOpenForDoor(session.eventId)) ? session : null;
+}
+
+/** Same as `requireDoorSession` but does not care whether the event has been
+ * archived. Only for sync deliveries — see PATCH. */
+async function getDoorSessionEvenIfArchived(): Promise<Extract<Session, { role: "door" }> | null> {
   const session = await getSession();
   return session?.role === "door" ? session : null;
 }
@@ -104,7 +113,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function PATCH(request: Request): Promise<Response> {
-  const session = await requireDoorSession();
+  const session = await getDoorSessionEvenIfArchived();
   if (!session) return Response.json({ status: "unauthorized" } satisfies CommitResult, { status: 401 });
 
   const body = await request.json();
@@ -114,6 +123,16 @@ export async function PATCH(request: Request): Promise<Response> {
   const override = Boolean(body.override);
   const method: ScanMethod = body.method === "manual" ? "manual" : "qr";
   const clientScanId = typeof body.clientScanId === "string" && body.clientScanId ? body.clientScanId : null;
+
+  // An archived event locks the door, so interactive commits get a 401 like
+  // any other dead session. A scan carrying a clientScanId is the exception:
+  // it physically happened at the door (usually while offline) before the
+  // event was archived, and refusing it would leave the attendance record
+  // permanently incomplete — the queue would only pause on the 401 and
+  // never drain. So sync deliveries stay accepted after archiving.
+  if (!clientScanId && !(await isEventOpenForDoor(session.eventId))) {
+    return Response.json({ status: "unauthorized" } satisfies CommitResult, { status: 401 });
+  }
 
   const guestRepository = makeGuestRepository();
   const guest = await new GetGuestUseCase(guestRepository).execute(session.eventId, guestId);
