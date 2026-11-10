@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { BulkGuestRow, CreateGuestInput, Guest, UpdateGuestInput } from "../Guest";
-import type { IGuestRepository } from "../IGuestRepository";
+import type { MergeFieldPicks } from "../dataQuality";
+import type { IGuestRepository, MergeGuestsResult } from "../IGuestRepository";
 import { CreateGuestUseCase } from "./CreateGuestUseCase";
 import { DeleteGuestUseCase } from "./DeleteGuestUseCase";
 import { GetGuestByCodeUseCase } from "./GetGuestByCodeUseCase";
 import { GetGuestUseCase } from "./GetGuestUseCase";
 import { ImportGuestsUseCase } from "./ImportGuestsUseCase";
+import { MergeGuestsUseCase } from "./MergeGuestsUseCase";
 import { ListGuestsForEventUseCase } from "./ListGuestsForEventUseCase";
 import { UpdateGuestUseCase } from "./UpdateGuestUseCase";
 
@@ -45,6 +47,13 @@ class FakeGuestRepository implements IGuestRepository {
 
   async delete(eventId: number, id: number): Promise<void> {
     this.rows = this.rows.filter((row) => !(row.id === id && row.eventId === eventId));
+  }
+
+  merged: { eventId: number; keepId: number; mergeId: number; picks: MergeFieldPicks }[] = [];
+
+  async mergeInto(eventId: number, keepId: number, mergeId: number, picks: MergeFieldPicks): Promise<MergeGuestsResult> {
+    this.merged.push({ eventId, keepId, mergeId, picks });
+    return { movedScans: 0 };
   }
 }
 
@@ -143,5 +152,20 @@ describe("guest use-cases", () => {
     expect((await new GetGuestUseCase(repo).execute(1, guest.id))?.name).toBe("Sara");
     await new DeleteGuestUseCase(repo).execute(1, guest.id);
     expect(await repo.getById(1, guest.id)).toBeNull();
+  });
+
+  it("refuses to merge a guest into itself", () => {
+    const repo = new FakeGuestRepository();
+    expect(() =>
+      new MergeGuestsUseCase(repo).execute({ eventId: 1, keepId: 4, mergeId: 4, picks: { phone: "keep", note: "keep" } }),
+    ).toThrow("اختر دعوتين مختلفتين للدمج.");
+    expect(repo.merged).toEqual([]);
+  });
+
+  it("hands a merge to the repository", async () => {
+    const repo = new FakeGuestRepository();
+    const picks = { phone: "merge", note: "keep" } as const;
+    await new MergeGuestsUseCase(repo).execute({ eventId: 1, keepId: 4, mergeId: 5, picks });
+    expect(repo.merged).toEqual([{ eventId: 1, keepId: 4, mergeId: 5, picks }]);
   });
 });
