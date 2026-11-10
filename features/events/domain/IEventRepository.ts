@@ -7,4 +7,5 @@ export interface IEventRepository {
   create(input: EventInput): Promise<Event>;
   update(id: number, input: EventInput): Promise<void>;
   archive(id: number): Promise<void>;
+  restore(id: number): Promise<void>;
 }

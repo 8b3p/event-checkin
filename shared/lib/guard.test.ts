@@ -79,6 +79,28 @@ describe("guard", () => {
     await expect(requireDoor()).resolves.toBe(event.id);
   });
 
+  it("requireDoor redirects an already-open door session to /door once its event is archived", async () => {
+    await new OwnerRepository().create({ email: "owner@example.com", passwordHash: "hash" });
+    const events = new EventRepository();
+    const event = await events.create({
+      name: "Test Event",
+      eventDate: null,
+      venue: null,
+      locationLink: null,
+      description: null,
+      doorCode: "DOOR1",
+      capacity: null,
+    });
+    await setSessionCookie({ role: "door", eventId: event.id });
+    await expect(requireDoor()).resolves.toBe(event.id);
+
+    await events.archive(event.id);
+    await expect(requireDoor()).rejects.toThrow("NEXT_REDIRECT:/door");
+
+    await events.restore(event.id);
+    await expect(requireDoor()).resolves.toBe(event.id);
+  });
+
   it("requireDoor redirects to /door when signed out", async () => {
     await new OwnerRepository().create({ email: "owner@example.com", passwordHash: "hash" });
     await expect(requireDoor()).rejects.toThrow("NEXT_REDIRECT:/door");

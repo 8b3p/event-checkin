@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { CreateEventUseCase } from "@/features/events/domain/use-cases/CreateEventUseCase";
 import { UpdateEventUseCase } from "@/features/events/domain/use-cases/UpdateEventUseCase";
 import { ArchiveEventUseCase } from "@/features/events/domain/use-cases/ArchiveEventUseCase";
+import { RestoreEventUseCase } from "@/features/events/domain/use-cases/RestoreEventUseCase";
 import { DuplicateEventUseCase } from "@/features/events/domain/use-cases/DuplicateEventUseCase";
 import { makeEventRepository } from "@/features/events/infrastructure/factory";
 import { requireOwner } from "@/shared/lib/guard";
@@ -67,10 +68,27 @@ export async function archiveEventAction(formData: FormData): Promise<void> {
   await requireOwner();
 
   const id = Number(formData.get("id"));
-  if (Number.isInteger(id)) await new ArchiveEventUseCase(makeEventRepository()).execute(id);
+  if (!Number.isInteger(id)) redirect("/");
+
+  await new ArchiveEventUseCase(makeEventRepository()).execute(id);
+
+  // Stay on the event so the owner sees the "door locked" banner.
+  revalidatePath("/");
+  revalidatePath(`/events/${id}`);
+  redirect(`/events/${id}`);
+}
+
+export async function restoreEventAction(formData: FormData): Promise<void> {
+  await requireOwner();
+
+  const id = Number(formData.get("id"));
+  if (!Number.isInteger(id)) redirect("/");
+
+  await new RestoreEventUseCase(makeEventRepository()).execute(id);
 
   revalidatePath("/");
-  redirect("/");
+  revalidatePath(`/events/${id}`);
+  redirect(`/events/${id}`);
 }
 
 export async function duplicateEventAction(formData: FormData): Promise<void> {

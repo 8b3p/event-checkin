@@ -45,7 +45,11 @@ class FakeEventRepository implements IEventRepository {
     return event;
   }
   async update(): Promise<void> {}
-  async archive(): Promise<void> {}
+  async archive(id: number): Promise<void> {
+    const row = this.rows.find((r) => r.id === id);
+    if (row) row.status = "archived";
+  }
+  async restore(): Promise<void> {}
 }
 
 describe("CheckSetupStatusUseCase", () => {
@@ -131,13 +135,29 @@ describe("AuthenticateDoorUseCase", () => {
       capacity: null,
     });
 
-    const session = await new AuthenticateDoorUseCase(eventRepo).execute("PALM1");
-    expect(session).toEqual({ role: "door", eventId: event.id });
+    const result = await new AuthenticateDoorUseCase(eventRepo).execute("PALM1");
+    expect(result).toEqual({ outcome: "ok", session: { role: "door", eventId: event.id } });
   });
 
-  it("returns null for an unknown door code", async () => {
+  it("reports an unknown door code as invalid", async () => {
     const eventRepo = new FakeEventRepository();
-    expect(await new AuthenticateDoorUseCase(eventRepo).execute("NOPE")).toBeNull();
+    expect(await new AuthenticateDoorUseCase(eventRepo).execute("NOPE")).toEqual({ outcome: "invalid_code" });
+  });
+
+  it("refuses the door code of an archived event, distinct from an invalid code", async () => {
+    const eventRepo = new FakeEventRepository();
+    const event = await eventRepo.create({
+      name: "Layla & Omar",
+      eventDate: null,
+      venue: null,
+      locationLink: null,
+      description: null,
+      doorCode: "PALM1",
+      capacity: null,
+    });
+    await eventRepo.archive(event.id);
+
+    expect(await new AuthenticateDoorUseCase(eventRepo).execute("palm1")).toEqual({ outcome: "archived" });
   });
 
   it("authenticates a door code entered in lowercase", async () => {
@@ -152,7 +172,7 @@ describe("AuthenticateDoorUseCase", () => {
       capacity: null,
     });
 
-    const session = await new AuthenticateDoorUseCase(eventRepo).execute("palm1");
-    expect(session).toEqual({ role: "door", eventId: event.id });
+    const result = await new AuthenticateDoorUseCase(eventRepo).execute("palm1");
+    expect(result).toEqual({ outcome: "ok", session: { role: "door", eventId: event.id } });
   });
 });

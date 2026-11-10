@@ -50,4 +50,8 @@ export class EventRepository implements IEventRepository {
   async archive(id: number): Promise<void> {
     await getDb().update(events).set({ status: "archived" }).where(eq(events.id, id));
   }
+
+  async restore(id: number): Promise<void> {
+    await getDb().update(events).set({ status: "live" }).where(eq(events.id, id));
+  }
 }
