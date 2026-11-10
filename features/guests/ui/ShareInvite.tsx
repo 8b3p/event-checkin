@@ -5,6 +5,7 @@ import { Button } from "@/shared/component/ui/button";
 import { Card, CardHeader, CardTitle } from "@/shared/component/ui/card";
 import { ErrorNote } from "@/shared/component/error-note";
 import type { Event } from "@/features/events/domain/Event";
+import { whatsappUrl } from "@/shared/lib/phone";
 import { pluralizeAr } from "@/shared/lib/pluralize-ar";
 import type { Guest } from "../domain/Guest";
 import { useDownloadGuestCardViewModel } from "../view-model/useDownloadGuestCardViewModel";
@@ -68,7 +69,7 @@ export default function ShareInvite({
     }
   }
 
-  const whatsapp = `https://wa.me/${(guest.phone ?? "").replace(/[^\d]/g, "")}?text=${encodeURIComponent(message)}`;
+  const whatsapp = whatsappUrl(guest.phone, message);
 
   return (
     <Card className="overflow-hidden">
@@ -113,7 +114,7 @@ export default function ShareInvite({
           >
             {cardDownload.state.status === "rendering" ? "جارٍ التحضير…" : "تحميل البطاقة"}
           </Button>
-          {guest.phone ? (
+          {whatsapp ? (
             <a
               href={whatsapp}
               target="_blank"

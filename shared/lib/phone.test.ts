@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { phoneDigits, phoneKey, whatsappUrl } from "./phone";
+import { internationalDigits, phoneDigits, phoneKey, whatsappUrl } from "./phone";
 
 describe("phoneDigits", () => {
   it("keeps digits only and drops a leading 00", () => {
@@ -45,5 +45,39 @@ describe("whatsappUrl", () => {
   it("returns null without a usable number", () => {
     expect(whatsappUrl(null, "x")).toBeNull();
     expect(whatsappUrl("abc", "x")).toBeNull();
+  });
+});
+
+describe("internationalDigits", () => {
+  it("turns a local Syrian 09… number into 963 9…", () => {
+    expect(internationalDigits("0931110001")).toBe("963931110001");
+    expect(internationalDigits("093 111 0001")).toBe("963931110001");
+    expect(internationalDigits("٠٩٣١١١٠٠٠١")).toBe("963931110001");
+  });
+
+  it("adds 963 to a mobile written without its leading 0", () => {
+    expect(internationalDigits("931110001")).toBe("963931110001");
+  });
+
+  it("leaves numbers that already carry a country code alone", () => {
+    expect(internationalDigits("+963 93 111 0001")).toBe("963931110001");
+    expect(internationalDigits("00963931110001")).toBe("963931110001");
+    expect(internationalDigits("+971 50 123 4567")).toBe("971501234567");
+  });
+
+  it("is empty without a number", () => {
+    expect(internationalDigits(null)).toBe("");
+  });
+});
+
+describe("whatsappUrl with local numbers", () => {
+  it("links a local 09… number to its +963 chat", () => {
+    expect(whatsappUrl("0931110001", "x")).toBe("https://wa.me/963931110001?text=x");
+  });
+});
+
+describe("phoneKey across formats", () => {
+  it("matches a Syrian number written locally and internationally", () => {
+    expect(phoneKey("0931110001")).toBe(phoneKey("+963 931 110 001"));
   });
 });
