@@ -1,7 +1,9 @@
 import type { IScanRepository } from "@/features/check-in/domain/IScanRepository";
 import type { IEventRepository } from "@/features/events/domain/IEventRepository";
+import { analyzeDwell } from "../analyzeDwell";
 import { densifyArrivals, peakArrival } from "../densifyArrivals";
 import type { EventReport } from "../EventReport";
+import { replayOccupancy } from "../replayOccupancy";
 import { summarizeAttendance } from "../summarizeAttendance";
 import { summarizeScanLog } from "../summarizeScanLog";
 
@@ -33,8 +35,15 @@ export class GetEventReportUseCase {
       guests,
       arrivals,
       peak: peakArrival(arrivals),
+      occupancy: replayOccupancy(scans, event.capacity),
+      dwell: analyzeDwell(guests, lastScanAt(scans)),
       scans,
       scanSummary: summarizeScanLog(scans),
     };
   }
+}
+
+/** The most recent scan of any kind — scans arrive oldest first, but don't lean on it. */
+function lastScanAt(scans: { at: Date }[]): Date | null {
+  return scans.reduce<Date | null>((latest, scan) => (!latest || scan.at > latest ? scan.at : latest), null);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/shared/component/ui/button";
+import PrintButton from "./PrintButton";
 
 /** Print (the browser's "Save as PDF" lives there) and the attendance CSV, stamped in the owner's timezone. */
 export default function ReportActions({ eventId }: { eventId: number }) {
@@ -14,9 +15,7 @@ export default function ReportActions({ eventId }: { eventId: number }) {
       <Button type="button" variant="outline" onClick={downloadCsv}>
         تنزيل الحضور (CSV)
       </Button>
-      <Button type="button" onClick={() => window.print()}>
-        طباعة / PDF
-      </Button>
+      <PrintButton />
     </div>
   );
 }
