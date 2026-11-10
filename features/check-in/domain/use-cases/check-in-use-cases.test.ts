@@ -11,7 +11,7 @@ import type {
 } from "../ScanEvent";
 import type { IScanRepository } from "../IScanRepository";
 import type { BulkGuestRow, CreateGuestInput, Guest, UpdateGuestInput } from "@/features/guests/domain/Guest";
-import type { IGuestRepository } from "@/features/guests/domain/IGuestRepository";
+import type { IGuestRepository, MergeGuestsResult } from "@/features/guests/domain/IGuestRepository";
 import { GetArrivalBucketsUseCase } from "./GetArrivalBucketsUseCase";
 import { GetEventStatsUseCase } from "./GetEventStatsUseCase";
 import { GetGuestInsideSeatsUseCase } from "./GetGuestInsideSeatsUseCase";
@@ -50,6 +50,9 @@ class FakeGuestRepository implements IGuestRepository {
   }
   async delete(eventId: number, id: number): Promise<void> {
     this.rows = this.rows.filter((g) => !(g.eventId === eventId && g.id === id));
+  }
+  async mergeInto(): Promise<MergeGuestsResult> {
+    throw new Error("merging guests is not exercised by the check-in use-cases");
   }
 }
 
