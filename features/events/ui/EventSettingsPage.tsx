@@ -16,6 +16,9 @@ export default function EventSettingsPage({ event }: { event: Event }) {
         <Link href={`/events/${event.id}/guests`} className="text-sm font-medium text-primary hover:underline">
           الضيوف ›
         </Link>
+        <Link href={`/events/${event.id}/feedback`} className="text-sm font-medium text-primary hover:underline">
+          الآراء ›
+        </Link>
       </div>
 
       <div className="mt-3">

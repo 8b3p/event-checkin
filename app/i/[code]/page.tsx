@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
+import { isEventOver } from "@/features/feedback/domain/isEventOver";
+import { GetFeedbackForGuestUseCase } from "@/features/feedback/domain/use-cases/GetFeedbackForGuestUseCase";
+import { makeFeedbackRepository } from "@/features/feedback/infrastructure/factory";
+import FeedbackForm from "@/features/feedback/ui/FeedbackForm";
 import { GetEventUseCase } from "@/features/events/domain/use-cases/GetEventUseCase";
 import { makeEventRepository } from "@/features/events/infrastructure/factory";
 import { GetGuestByCodeUseCase } from "@/features/guests/domain/use-cases/GetGuestByCodeUseCase";
@@ -37,11 +41,23 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
   const event = await new GetEventUseCase(makeEventRepository()).execute(guest.eventId);
   if (!event) notFound();
 
+  const feedbackOpen = isEventOver(event);
+  const existingFeedback = feedbackOpen
+    ? await new GetFeedbackForGuestUseCase(makeFeedbackRepository()).execute(guest.id)
+    : null;
+
   const qr = await QRCode.toDataURL(inviteUrl(guest.code), INVITE_CARD_QR_OPTIONS);
 
   return (
     <main dir="rtl" className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-12">
       <InviteCard event={event} guest={guest} qr={qr} />
+
+      {feedbackOpen ? (
+        <FeedbackForm
+          code={guest.code}
+          initial={existingFeedback ? { rating: existingFeedback.rating, comment: existingFeedback.comment } : null}
+        />
+      ) : null}
 
       <p className="mt-6 text-center text-xs text-muted-foreground">احتفظ بهذا الرابط لنفسك — إنه ما يتيح لك الدخول.</p>
     </main>
