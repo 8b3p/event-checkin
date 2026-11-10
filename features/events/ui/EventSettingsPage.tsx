@@ -13,9 +13,14 @@ export default function EventSettingsPage({ event }: { event: Event }) {
         <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
           ‹ رجوع إلى الفعاليات
         </Link>
-        <Link href={`/events/${event.id}/guests`} className="text-sm font-medium text-primary hover:underline">
-          الضيوف ›
-        </Link>
+        <div className="flex gap-4">
+          <Link href={`/events/${event.id}/report`} className="text-sm font-medium text-primary hover:underline">
+            التقرير
+          </Link>
+          <Link href={`/events/${event.id}/guests`} className="text-sm font-medium text-primary hover:underline">
+            الضيوف ›
+          </Link>
+        </div>
       </div>
 
       <div className="mt-3">

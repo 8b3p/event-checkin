@@ -6,7 +6,7 @@ import { Button } from "@/shared/component/ui/button";
 export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-card print:hidden">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-6 px-5">
           <Link href="/" className="display shrink-0 text-xl text-foreground">
             الباب
