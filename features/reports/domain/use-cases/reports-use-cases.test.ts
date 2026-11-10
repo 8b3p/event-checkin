@@ -78,5 +78,9 @@ describe("GetEventReportUseCase", () => {
     expect(report?.arrivals).toHaveLength(3);
     expect(report?.peak).toEqual({ minute: "2026-11-10T18:30:00.000Z", seats: 5 });
     expect(report?.scanSummary).toMatchObject({ total: 2, checkOuts: 1, manual: 1 });
+    expect(report?.occupancy.peak).toEqual({ inside: 2, at: new Date("2026-11-10T18:00:00Z") });
+    expect(report?.occupancy.capacity).toBe(120);
+    expect(report?.occupancy.stillInside).toBe(0);
+    expect(report?.dwell).toMatchObject({ measuredParties: 1, averageMinutes: 240, earlyLeavers: [] });
   });
 });

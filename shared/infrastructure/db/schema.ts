@@ -33,6 +33,11 @@ export const events = pgTable("events", {
   capacity: integer("capacity"),
   status: eventStatusEnum("status").notNull().default("live"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Unguessable token behind the read-only report link (/r/<token>); null = not shared. Revoking nulls it. */
+  reportShareToken: text("report_share_token").unique(),
+  reportSharedAt: timestamp("report_shared_at", { withTimezone: true }),
+  /** Whether the shared report names guests. Off unless the owner opts in. */
+  reportShareShowNames: boolean("report_share_show_names").notNull().default(false),
 });
 
 export const guests = pgTable(

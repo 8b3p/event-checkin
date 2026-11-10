@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ArrivalBucket } from "@/features/check-in/domain/ScanEvent";
 import { pluralizeAr } from "@/shared/lib/pluralize-ar";
+import { niceCeiling } from "./chartScale";
 
 const TIME = new Intl.DateTimeFormat("ar-u-nu-latn", { hour: "2-digit", minute: "2-digit" });
 
@@ -107,12 +108,4 @@ export default function ArrivalsChart({ buckets }: { buckets: ArrivalBucket[] })
       </p>
     </div>
   );
-}
-
-/** Rounds the axis top up to something a reader can divide in their head. */
-function niceCeiling(value: number): number {
-  if (value <= 5) return 5;
-  if (value <= 10) return 10;
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  return Math.ceil(value / (magnitude / 2)) * (magnitude / 2);
 }
