@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgEnum,
@@ -80,4 +82,22 @@ export const scanEvents = pgTable(
     index("idx_scan_events_guest").on(table.guestId),
     index("idx_scan_events_at").on(table.at),
   ],
+);
+
+/** One post-event answer per guest (rating + optional comment); a guest revising
+ * their answer updates the same row. */
+export const guestFeedback = pgTable(
+  "guest_feedback",
+  {
+    id: serial("id").primaryKey(),
+    guestId: integer("guest_id")
+      .notNull()
+      .unique()
+      .references(() => guests.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [check("guest_feedback_rating_range", sql`${table.rating} between 1 and 5`)],
 );
