@@ -4,6 +4,7 @@ import type { Event } from "@/features/events/domain/Event";
 import { pluralizeAr } from "@/shared/lib/pluralize-ar";
 import type { Guest } from "../domain/Guest";
 import GuestManager from "./GuestManager";
+import GuestsSubnav from "./GuestsSubnav";
 
 export default function GuestListPage({ event, guests }: { event: Event; guests: Guest[] }) {
   const seats = guests.reduce((total, guest) => total + guest.seats, 0);
@@ -25,6 +26,7 @@ export default function GuestListPage({ event, guests }: { event: Event; guests:
         />
       </div>
 
+      <GuestsSubnav eventId={event.id} current="list" />
       <GuestManager event={event} guests={guests} />
     </Shell>
   );

@@ -1,8 +1,9 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/shared/infrastructure/db/client";
-import { guests } from "@/shared/infrastructure/db/schema";
+import { guests, scanEvents } from "@/shared/infrastructure/db/schema";
 import type { BulkGuestRow, CreateGuestInput, Guest, UpdateGuestInput } from "../domain/Guest";
-import type { IGuestRepository } from "../domain/IGuestRepository";
+import type { MergeFieldPicks } from "../domain/dataQuality";
+import type { IGuestRepository, MergeGuestsResult } from "../domain/IGuestRepository";
 
 function toGuest(row: typeof guests.$inferSelect): Guest {
   return {
@@ -63,5 +64,41 @@ export class GuestRepository implements IGuestRepository {
     await getDb()
       .delete(guests)
       .where(and(eq(guests.id, id), eq(guests.eventId, eventId)));
+  }
+
+  async mergeInto(
+    eventId: number,
+    keepId: number,
+    mergeId: number,
+    picks: MergeFieldPicks,
+  ): Promise<MergeGuestsResult> {
+    return getDb().transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(guests)
+        .where(and(eq(guests.eventId, eventId), inArray(guests.id, [keepId, mergeId])))
+        .for("update");
+      const keep = rows.find((row) => row.id === keepId);
+      const merge = rows.find((row) => row.id === mergeId);
+      if (!keep || !merge) throw new Error("لم يتم العثور على إحدى الدعوتين.");
+
+      const moved = await tx
+        .update(scanEvents)
+        .set({ guestId: keepId })
+        .where(eq(scanEvents.guestId, mergeId))
+        .returning({ id: scanEvents.id });
+
+      await tx
+        .update(guests)
+        .set({
+          phone: picks.phone === "merge" ? merge.phone : keep.phone,
+          note: picks.note === "merge" ? merge.note : keep.note,
+        })
+        .where(eq(guests.id, keepId));
+
+      await tx.delete(guests).where(eq(guests.id, mergeId));
+
+      return { movedScans: moved.length };
+    });
   }
 }

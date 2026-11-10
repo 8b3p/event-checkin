@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { EventRepository } from "@/features/events/infrastructure/EventRepository";
+import { ScanRepository } from "@/features/check-in/infrastructure/ScanRepository";
 import { resetDb } from "@/shared/infrastructure/db/test-helpers";
 import { GuestRepository } from "./GuestRepository";
 
@@ -101,5 +102,95 @@ describe("GuestRepository (integration)", () => {
     expect((await repo.getById(eventA.id, guest.id))?.name).toBe("A Guest");
     await repo.delete(eventA.id, guest.id);
     expect(await repo.getById(eventA.id, guest.id)).toBeNull();
+  });
+
+  describe("mergeInto", () => {
+    async function seed() {
+      const events = new EventRepository();
+      const event = await events.create(EVENT);
+      const other = await events.create({ ...EVENT, doorCode: "PALM2" });
+      const repo = new GuestRepository();
+      const make = (eventId: number, name: string, code: string, extra: Partial<{ phone: string; note: string }> = {}) =>
+        repo.create({
+          eventId,
+          name,
+          seats: 2,
+          phone: extra.phone ?? null,
+          note: extra.note ?? null,
+          code,
+          source: "invited",
+        });
+      return { event, other, repo, make, scans: new ScanRepository() };
+    }
+
+    const scan = (guestId: number, direction: "in" | "out", clientScanId?: string) => ({
+      guestId,
+      direction,
+      method: "qr" as const,
+      seats: 2,
+      scannedBy: "door",
+      override: false,
+      clientScanId,
+    });
+
+    it("moves every scan to the kept guest, deletes the merged one, and keeps the kept phone/note", async () => {
+      const { event, repo, make, scans } = await seed();
+      const keep = await make(event.id, "Sara", "KEEP0001", { phone: "0501111111", note: "A" });
+      const merge = await make(event.id, "Sara", "MERGE001", { phone: "0502222222", note: "B" });
+      await scans.record(scan(merge.id, "in", "c-1"));
+      await scans.record(scan(merge.id, "out", "c-2"));
+      await scans.record(scan(keep.id, "in"));
+
+      const result = await repo.mergeInto(event.id, keep.id, merge.id, { phone: "keep", note: "keep" });
+
+      expect(result).toEqual({ movedScans: 2 });
+      expect(await repo.getById(event.id, merge.id)).toBeNull();
+      const kept = await repo.getById(event.id, keep.id);
+      expect(kept).toMatchObject({ phone: "0501111111", note: "A" });
+      expect(await scans.listForGuest(keep.id)).toHaveLength(3);
+      expect(await scans.listForGuest(merge.id)).toHaveLength(0);
+    });
+
+    it("takes the merged guest's phone and note when asked", async () => {
+      const { event, repo, make } = await seed();
+      const keep = await make(event.id, "Sara", "KEEP0001", { phone: "0501111111", note: "A" });
+      const merge = await make(event.id, "Sara", "MERGE001", { phone: "0502222222", note: "B" });
+
+      await repo.mergeInto(event.id, keep.id, merge.id, { phone: "merge", note: "merge" });
+
+      expect(await repo.getById(event.id, keep.id)).toMatchObject({ phone: "0502222222", note: "B" });
+    });
+
+    it("mixes the picks per field", async () => {
+      const { event, repo, make } = await seed();
+      const keep = await make(event.id, "Sara", "KEEP0001", { phone: "0501111111", note: "A" });
+      const merge = await make(event.id, "Sara", "MERGE001", { phone: "0502222222", note: "B" });
+
+      await repo.mergeInto(event.id, keep.id, merge.id, { phone: "merge", note: "keep" });
+
+      expect(await repo.getById(event.id, keep.id)).toMatchObject({ phone: "0502222222", note: "A" });
+    });
+
+    it("changes nothing when a guest belongs to another event", async () => {
+      const { event, other, repo, make, scans } = await seed();
+      const keep = await make(event.id, "Sara", "KEEP0001");
+      const stranger = await make(other.id, "Sara", "OTHER001");
+      await scans.record(scan(stranger.id, "in"));
+
+      await expect(repo.mergeInto(event.id, keep.id, stranger.id, { phone: "keep", note: "keep" })).rejects.toThrow();
+
+      expect(await repo.getById(other.id, stranger.id)).not.toBeNull();
+      expect(await scans.listForGuest(stranger.id)).toHaveLength(1);
+      expect(await scans.listForGuest(keep.id)).toHaveLength(0);
+    });
+
+    it("changes nothing when the guest to merge doesn't exist", async () => {
+      const { event, repo, make } = await seed();
+      const keep = await make(event.id, "Sara", "KEEP0001", { phone: "0501111111" });
+
+      await expect(repo.mergeInto(event.id, keep.id, 9999, { phone: "merge", note: "merge" })).rejects.toThrow();
+
+      expect(await repo.getById(event.id, keep.id)).toMatchObject({ phone: "0501111111" });
+    });
   });
 });
