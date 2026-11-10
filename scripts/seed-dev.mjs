@@ -70,8 +70,19 @@ const walkIns = [
 
 const base = Date.UTC(2026, 10, 7, 15, 0); // 18:00 Riyadh
 const at = (minutes) => new Date(base + minutes * 60_000);
-let code = 1;
-const nextCode = () => `DEV${String(code++).padStart(5, "0")}`;
+// Real codes are 10 characters from this alphabet (see shared/lib/code-format.ts),
+// or /i/[code] and the scanner reject them. "DEVG" + a 6-character counter.
+const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+let code = 0;
+function nextCode() {
+  let n = code++;
+  let suffix = "";
+  for (let i = 0; i < 6; i++) {
+    suffix = ALPHABET[n % ALPHABET.length] + suffix;
+    n = Math.floor(n / ALPHABET.length);
+  }
+  return `DEVG${suffix}`;
+}
 
 async function addGuest(name, seats, phone, source, arrivals, leftAt) {
   const {
