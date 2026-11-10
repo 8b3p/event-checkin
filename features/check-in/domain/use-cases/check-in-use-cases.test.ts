@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type {
   ArrivalBucket,
+  EventScan,
   EventStats,
+  GuestAttendanceRow,
   GuestWithStatus,
   RecentScan,
   RecordScanInput,
@@ -57,6 +59,8 @@ class FakeScanRepository implements IScanRepository {
   stats: EventStats = { invites: 0, seatsInvited: 0, guestsInside: 0, seatsInside: 0 };
   buckets: ArrivalBucket[] = [];
   recent: RecentScan[] = [];
+  eventScans: EventScan[] = [];
+  attendance: GuestAttendanceRow[] = [];
   private nextId = 1;
 
   async record(input: RecordScanInput): Promise<ScanEvent> {
@@ -102,6 +106,14 @@ class FakeScanRepository implements IScanRepository {
 
   async recentScans(): Promise<RecentScan[]> {
     return this.recent;
+  }
+
+  async listScansForEvent(): Promise<EventScan[]> {
+    return this.eventScans;
+  }
+
+  async listGuestAttendance(): Promise<GuestAttendanceRow[]> {
+    return this.attendance;
   }
 }
 

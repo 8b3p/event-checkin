@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:push:test": "drizzle-kit push --config drizzle.test.config.ts"
   },
   "dependencies": {
     "bcryptjs": "3.0.2",

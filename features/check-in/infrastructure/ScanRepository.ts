@@ -2,10 +2,13 @@ import { and, asc, desc, eq, ilike } from "drizzle-orm";
 import { getDb } from "@/shared/infrastructure/db/client";
 import { guests, scanEvents } from "@/shared/infrastructure/db/schema";
 import { computeStatsFromGuests } from "../domain/computeStatsFromGuests";
+import { attendanceStatus, foldGuestAttendance } from "../domain/foldGuestAttendance";
 import { foldGuestBalances } from "../domain/foldGuestBalances";
 import type {
   ArrivalBucket,
+  EventScan,
   EventStats,
+  GuestAttendanceRow,
   GuestWithStatus,
   RecentScan,
   RecordScanInput,
@@ -130,6 +133,44 @@ export class ScanRepository implements IScanRepository {
     return [...buckets.entries()]
       .map(([minute, seats]) => ({ minute, seats }))
       .sort((a, b) => a.minute.localeCompare(b.minute));
+  }
+
+  async listScansForEvent(eventId: number): Promise<EventScan[]> {
+    return getDb()
+      .select({
+        id: scanEvents.id,
+        guestId: scanEvents.guestId,
+        guestName: guests.name,
+        direction: scanEvents.direction,
+        method: scanEvents.method,
+        seats: scanEvents.seats,
+        at: scanEvents.at,
+        scannedBy: scanEvents.scannedBy,
+        override: scanEvents.override,
+      })
+      .from(scanEvents)
+      .innerJoin(guests, eq(guests.id, scanEvents.guestId))
+      .where(eq(guests.eventId, eventId))
+      .orderBy(asc(scanEvents.at), asc(scanEvents.id));
+  }
+
+  async listGuestAttendance(eventId: number): Promise<GuestAttendanceRow[]> {
+    const [guestsWithStatus, scans] = await Promise.all([
+      this.listGuestsWithStatus(eventId),
+      this.listScansForEvent(eventId),
+    ]);
+    const attendance = foldGuestAttendance(scans);
+
+    return guestsWithStatus.map((guest) => {
+      const guestAttendance = attendance.get(guest.id);
+      return {
+        ...guest,
+        firstInAt: guestAttendance?.firstInAt ?? null,
+        lastOutAt: guestAttendance?.lastOutAt ?? null,
+        peakInsideSeats: guestAttendance?.peakInsideSeats ?? 0,
+        status: attendanceStatus(guest.seats, guestAttendance),
+      };
+    });
   }
 
   async recentScans(eventId: number, limit = 12): Promise<RecentScan[]> {

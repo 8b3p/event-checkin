@@ -1,6 +1,8 @@
 import type {
   ArrivalBucket,
+  EventScan,
   EventStats,
+  GuestAttendanceRow,
   GuestWithStatus,
   RecentScan,
   RecordScanInput,
@@ -20,4 +22,8 @@ export interface IScanRepository {
   eventStats(eventId: number): Promise<EventStats>;
   arrivalBuckets(eventId: number): Promise<ArrivalBucket[]>;
   recentScans(eventId: number, limit?: number): Promise<RecentScan[]>;
+  /** Every scan for the event, oldest first. */
+  listScansForEvent(eventId: number): Promise<EventScan[]>;
+  /** Every guest, with first arrival / last departure / how many of the party came. */
+  listGuestAttendance(eventId: number): Promise<GuestAttendanceRow[]>;
 }

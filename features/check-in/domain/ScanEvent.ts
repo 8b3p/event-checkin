@@ -1,3 +1,5 @@
+import type { AttendanceStatus, GuestAttendance } from "./foldGuestAttendance";
+
 export type ScanDirection = "in" | "out";
 export type ScanMethod = "qr" | "manual";
 
@@ -53,3 +55,9 @@ export type RecentScan = {
   scannedBy: string;
   override: boolean;
 };
+
+/** One row of an event's full scan log, oldest first — the input to every after-the-event report. */
+export type EventScan = RecentScan & { id: number; guestId: number };
+
+/** A guest plus everything their scans say about how they attended. */
+export type GuestAttendanceRow = GuestWithStatus & GuestAttendance & { status: AttendanceStatus };

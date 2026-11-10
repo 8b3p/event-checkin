@@ -191,6 +191,41 @@ describe("ScanRepository (integration)", () => {
     expect(await repo.listForGuest(guest.id)).toHaveLength(2);
   });
 
+  it("lists an event's full scan log oldest first, scoped to the event", async () => {
+    const eventRepo = new EventRepository();
+    const eventA = await eventRepo.create(EVENT);
+    const eventB = await eventRepo.create({ ...EVENT, doorCode: "PALM2" });
+    const guestA = await seedGuest(eventA.id, { name: "Sara Ahmed", code: "AAAAAAA1" });
+    const guestB = await seedGuest(eventB.id, { name: "Omar Khan", code: "BBBBBBB1" });
+
+    const repo = new ScanRepository();
+    await repo.record({ guestId: guestA.id, direction: "in", method: "qr", seats: 2, scannedBy: "door", override: false });
+    await repo.record({ guestId: guestB.id, direction: "in", method: "qr", seats: 1, scannedBy: "door", override: false });
+    await repo.record({ guestId: guestA.id, direction: "out", method: "manual", seats: 1, scannedBy: "door", override: true });
+
+    const scans = await repo.listScansForEvent(eventA.id);
+    expect(scans.map((s) => s.direction)).toEqual(["in", "out"]);
+    expect(scans[1]).toMatchObject({ guestId: guestA.id, guestName: "Sara Ahmed", method: "manual", override: true });
+  });
+
+  it("derives per-guest attendance, including no-shows", async () => {
+    const event = await new EventRepository().create(EVENT);
+    const came = await seedGuest(event.id, { name: "Came", seats: 2, code: "CAMECAME" });
+    const partly = await seedGuest(event.id, { name: "Partly", seats: 3, code: "PARTLY01" });
+    await seedGuest(event.id, { name: "Stayed Home", seats: 1, code: "HOMEHOME" });
+
+    const repo = new ScanRepository();
+    await repo.record({ guestId: came.id, direction: "in", method: "qr", seats: 2, scannedBy: "door", override: false });
+    await repo.record({ guestId: came.id, direction: "out", method: "qr", seats: 2, scannedBy: "door", override: false });
+    await repo.record({ guestId: partly.id, direction: "in", method: "qr", seats: 1, scannedBy: "door", override: false });
+
+    const byName = new Map((await repo.listGuestAttendance(event.id)).map((row) => [row.name, row]));
+    expect(byName.get("Came")).toMatchObject({ status: "full", peakInsideSeats: 2, insideSeats: 0 });
+    expect(byName.get("Came")?.lastOutAt).toBeInstanceOf(Date);
+    expect(byName.get("Partly")).toMatchObject({ status: "partial", peakInsideSeats: 1, lastOutAt: null });
+    expect(byName.get("Stayed Home")).toMatchObject({ status: "no_show", firstInAt: null, peakInsideSeats: 0 });
+  });
+
   it("scopes arrival buckets to event and filters by direction (in only)", async () => {
     const eventRepo = new EventRepository();
     const eventA = await eventRepo.create(EVENT);

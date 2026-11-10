@@ -35,6 +35,20 @@ maps it to 5433 instead. `DATABASE_URL` in `.env.example` already points at
 `postgres://door:door@localhost:5433/door_dev`, matching `docker-compose.yml`;
 you shouldn't need to change it for local dev.
 
+## Running the tests
+
+The integration tests `TRUNCATE` every table before each test, so they never
+use `DATABASE_URL`. They run against a separate local database, `door_test`
+(override with `TEST_DATABASE_URL`), and refuse to start if that URL isn't on
+`localhost`:
+
+```bash
+docker compose up -d
+docker compose exec postgres createdb -U door door_test   # once
+npm run db:push:test                                      # after every schema change
+npm test
+```
+
 Guest card images are drawn in the owner's browser from the same
 [`InviteCard`](features/guests/ui/InviteCard.tsx) component guests see on
 `/i/[code]`, so a downloaded card always matches the real invitation — no
