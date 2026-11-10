@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { EventRepository } from "@/features/events/infrastructure/EventRepository";
 import { ScanRepository } from "@/features/check-in/infrastructure/ScanRepository";
+import { FeedbackRepository } from "@/features/feedback/infrastructure/FeedbackRepository";
 import { resetDb } from "@/shared/infrastructure/db/test-helpers";
 import { GuestRepository } from "./GuestRepository";
 
@@ -182,6 +183,32 @@ describe("GuestRepository (integration)", () => {
       expect(await repo.getById(other.id, stranger.id)).not.toBeNull();
       expect(await scans.listForGuest(stranger.id)).toHaveLength(1);
       expect(await scans.listForGuest(keep.id)).toHaveLength(0);
+    });
+
+    it("carries the merged guest's feedback over when the kept guest left none", async () => {
+      const { event, repo, make } = await seed();
+      const keep = await make(event.id, "Sara", "KEEP0001");
+      const merge = await make(event.id, "Sara", "MERGE001");
+      const feedback = new FeedbackRepository();
+      await feedback.upsert({ guestId: merge.id, rating: 5, comment: "Lovely" });
+
+      await repo.mergeInto(event.id, keep.id, merge.id, { phone: "keep", note: "keep" });
+
+      expect(await feedback.getForGuest(keep.id)).toMatchObject({ rating: 5, comment: "Lovely" });
+    });
+
+    it("keeps the kept guest's own feedback when both answered", async () => {
+      const { event, repo, make } = await seed();
+      const keep = await make(event.id, "Sara", "KEEP0001");
+      const merge = await make(event.id, "Sara", "MERGE001");
+      const feedback = new FeedbackRepository();
+      await feedback.upsert({ guestId: keep.id, rating: 4, comment: "Kept" });
+      await feedback.upsert({ guestId: merge.id, rating: 1, comment: "Merged" });
+
+      await repo.mergeInto(event.id, keep.id, merge.id, { phone: "keep", note: "keep" });
+
+      expect(await feedback.getForGuest(keep.id)).toMatchObject({ rating: 4, comment: "Kept" });
+      expect(await feedback.listForEvent(event.id)).toHaveLength(1);
     });
 
     it("changes nothing when the guest to merge doesn't exist", async () => {

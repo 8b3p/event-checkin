@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/shared/infrastructure/db/client";
-import { guests, scanEvents } from "@/shared/infrastructure/db/schema";
+import { guestFeedback, guests, scanEvents } from "@/shared/infrastructure/db/schema";
 import type { BulkGuestRow, CreateGuestInput, Guest, UpdateGuestInput } from "../domain/Guest";
 import type { MergeFieldPicks } from "../domain/dataQuality";
 import type { IGuestRepository, MergeGuestsResult } from "../domain/IGuestRepository";
@@ -95,6 +95,18 @@ export class GuestRepository implements IGuestRepository {
           note: picks.note === "merge" ? merge.note : keep.note,
         })
         .where(eq(guests.id, keepId));
+
+      // Feedback is one answer per guest. The merged guest's answer would
+      // cascade away with them, so it moves over — unless the kept guest
+      // already answered, in which case theirs stands.
+      const keptFeedback = await tx
+        .select({ id: guestFeedback.id })
+        .from(guestFeedback)
+        .where(eq(guestFeedback.guestId, keepId))
+        .limit(1);
+      if (keptFeedback.length === 0) {
+        await tx.update(guestFeedback).set({ guestId: keepId }).where(eq(guestFeedback.guestId, mergeId));
+      }
 
       await tx.delete(guests).where(eq(guests.id, mergeId));
 

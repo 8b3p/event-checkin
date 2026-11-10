@@ -18,8 +18,9 @@ export type SubmitFeedbackResult =
 export class SubmitFeedbackUseCase {
   constructor(
     private readonly feedbackRepository: IFeedbackRepository,
-    private readonly guestRepository: IGuestRepository,
-    private readonly eventRepository: IEventRepository,
+    // Only the reads it needs, so it doesn't care what else those repositories grow.
+    private readonly guestRepository: Pick<IGuestRepository, "getByCode">,
+    private readonly eventRepository: Pick<IEventRepository, "getById">,
     private readonly now: () => Date = () => new Date(),
   ) {}
 

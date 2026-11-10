@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Event, EventInput } from "@/features/events/domain/Event";
+import type { Event } from "@/features/events/domain/Event";
 import type { IEventRepository } from "@/features/events/domain/IEventRepository";
-import type { BulkGuestRow, CreateGuestInput, Guest, UpdateGuestInput } from "@/features/guests/domain/Guest";
+import type { Guest } from "@/features/guests/domain/Guest";
 import type { IGuestRepository } from "@/features/guests/domain/IGuestRepository";
 import type { EventFeedbackItem, GuestFeedback, SaveFeedbackInput } from "../Feedback";
 import type { IFeedbackRepository } from "../IFeedbackRepository";
@@ -51,43 +51,18 @@ function makeEvent(overrides: Partial<Event>): Event {
   };
 }
 
-class FakeEventRepository implements IEventRepository {
+class FakeEventRepository implements Pick<IEventRepository, "getById"> {
   constructor(private readonly event: Event | null) {}
-  async list() {
-    return this.event ? [this.event] : [];
-  }
   async getById() {
     return this.event;
   }
-  async getByDoorCode() {
-    return this.event;
-  }
-  async create(_input: EventInput): Promise<Event> {
-    throw new Error("not used");
-  }
-  async update() {}
-  async archive() {}
 }
 
-class FakeGuestRepository implements IGuestRepository {
+class FakeGuestRepository implements Pick<IGuestRepository, "getByCode"> {
   constructor(private readonly guest: Guest | null) {}
-  async listForEvent() {
-    return this.guest ? [this.guest] : [];
-  }
-  async getById() {
-    return this.guest;
-  }
   async getByCode(code: string) {
     return this.guest && this.guest.code === code ? this.guest : null;
   }
-  async create(_input: CreateGuestInput): Promise<Guest> {
-    throw new Error("not used");
-  }
-  async createMany(_eventId: number, _rows: BulkGuestRow[]) {
-    return 0;
-  }
-  async update(_eventId: number, _id: number, _input: UpdateGuestInput) {}
-  async delete() {}
 }
 
 const GUEST: Guest = {
